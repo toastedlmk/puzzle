@@ -70,7 +70,67 @@ test("help, source inspector, details tab, and decoder desk are functional", asy
   await page.locator("#decode-input").fill("not hex");
   await page.getByRole("button", { name: "Translate" }).click();
   await expect(page.locator("#decode-output")).toHaveClass("decode-error");
+  await expect(
+    page.getByRole("button", { name: "Use as answer" }),
+  ).toBeDisabled();
 });
+
+for (const width of [1440, 390]) {
+  test(`decoder result fills the answer without submitting at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    await page.locator("#answer").fill("wrong");
+    await page.locator("#answer").press("Enter");
+    await expect(page.locator("#answer")).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+    await page.locator('[data-action="decoder"]').click();
+    const useButton = page.getByRole("button", { name: "Use as answer" });
+    await expect(useButton).toBeDisabled();
+
+    await page.getByRole("button", { name: "Translate", exact: true }).click();
+    await expect(useButton).toBeDisabled();
+    await page
+      .locator("#decode-input")
+      .fill(Buffer.from("x".repeat(201)).toString("base64"));
+    await page.getByRole("button", { name: "Translate", exact: true }).click();
+    await expect(useButton).toBeDisabled();
+    await expect(page.locator("#decode-use-hint")).toContainText(
+      "200 characters",
+    );
+
+    await page.locator("#decode-method").selectOption("hex");
+    await page.locator("#decode-input").fill("57 48 41 54");
+    await page.getByRole("button", { name: "Translate", exact: true }).click();
+    await expect(page.locator("#decode-output")).toHaveText("WHAT");
+    await expect(useButton).toBeEnabled();
+    await useButton.click();
+    await expect(page.getByRole("dialog")).not.toBeVisible();
+    await expect(page.locator("#answer")).toHaveValue("WHAT");
+    await expect(page.locator("#answer")).toBeFocused();
+    await expect(page.locator("#answer")).not.toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+    await expect(page.locator("#answer-feedback")).toBeEmpty();
+    await expect(page.locator(".header-progress")).toHaveText("0 / 100");
+    await page.locator("#answer").press("Enter");
+    await expect(page.locator(".header-progress")).toHaveText("1 / 100");
+
+    await page.locator('[data-action="decoder"]').click();
+    await page.locator("#decode-input").fill("d2hhdA==");
+    await page.getByRole("button", { name: "Translate", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Use as answer" }),
+    ).toBeDisabled();
+    await expect(page.locator("#decode-use-hint")).toContainText(
+      "unsolved entry",
+    );
+  });
+}
 
 test("all 100 entries can be completed and browser-specific clues are really present", async ({
   page,

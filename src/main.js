@@ -388,11 +388,39 @@ function openDecoder() {
     'The decoder desk<span class="title-period">.</span>',
     "A LITTLE HELP WITH TRANSLATION",
     `
-    <p class="dialog-lede">Change the language. Keep the curiosity. This desk translates text; it never runs code.</p><form id="decoder-form"><label for="decode-method" class="eyebrow form-label">TRANSLATION</label><select id="decode-method"><option value="base64">Base64 → text</option><option value="binary">Binary ASCII → text</option><option value="hex">Hexadecimal ASCII → text</option><option value="ascii">Decimal ASCII → text</option><option value="alphabet">Alphabet positions (A = 1)</option><option value="rot13">ROT13</option><option value="caesar1">Caesar: move back 1</option><option value="caesar2">Caesar: move back 2</option><option value="url">URL percent-decoding</option><option value="reverse">Reverse text</option></select><label class="eyebrow form-label" for="decode-input">THE CODED TEXT</label><textarea id="decode-input" rows="4" maxlength="5000" placeholder="Paste or type a small mystery…" spellcheck="false"></textarea><button class="primary-button" type="submit">Translate ${icon("arrow")}</button><div class="decoder-result" aria-live="polite"><span class="eyebrow">THE OTHER SIDE</span><output id="decode-output">Your translation will appear here.</output></div></form>
+    <p class="dialog-lede">Change the language. Keep the curiosity. This desk translates text; it never runs code.</p><form id="decoder-form"><label for="decode-method" class="eyebrow form-label">TRANSLATION</label><select id="decode-method"><option value="base64">Base64 → text</option><option value="binary">Binary ASCII → text</option><option value="hex">Hexadecimal ASCII → text</option><option value="ascii">Decimal ASCII → text</option><option value="alphabet">Alphabet positions (A = 1)</option><option value="rot13">ROT13</option><option value="caesar1">Caesar: move back 1</option><option value="caesar2">Caesar: move back 2</option><option value="url">URL percent-decoding</option><option value="reverse">Reverse text</option></select><label class="eyebrow form-label" for="decode-input">THE CODED TEXT</label><textarea id="decode-input" rows="4" maxlength="5000" placeholder="Paste or type a small mystery…" spellcheck="false"></textarea><button class="primary-button" type="submit">Translate ${icon("arrow")}</button><div class="decoder-result" aria-live="polite"><span class="eyebrow">THE OTHER SIDE</span><output id="decode-output">Your translation will appear here.</output><div class="decoder-result-actions"><button id="use-translation" class="secondary-button decoder-use-answer" type="button" aria-describedby="decode-use-hint" disabled>Use as answer ${icon("arrow")}</button><span id="decode-use-hint">Translate some text to use it as your answer.</span></div></div></form>
   `,
   );
+  let translatedText = "";
+  const useButton = $("#use-translation");
+  const useHint = $("#decode-use-hint");
+  function updateUseButton() {
+    const answer = $("#answer");
+    useButton.disabled = true;
+    if (!translatedText.trim()) {
+      useHint.textContent = "Translate some text to use it as your answer.";
+    } else if (!answer) {
+      useHint.textContent = "Open an unsolved entry to use this as an answer.";
+    } else if (translatedText.length > answer.maxLength) {
+      useHint.textContent = `The answer box accepts up to ${answer.maxLength} characters.`;
+    } else {
+      useButton.disabled = false;
+      useHint.textContent = "Fills your answer box. Submit when you are ready.";
+    }
+  }
+  useButton.addEventListener("click", () => {
+    updateUseButton();
+    if (useButton.disabled) return;
+    const answer = $("#answer");
+    answer.value = translatedText;
+    answer.dispatchEvent(new Event("input", { bubbles: true }));
+    $("#app-dialog").close();
+    answer.focus();
+    answer.setSelectionRange(answer.value.length, answer.value.length);
+  });
   $("#decoder-form").addEventListener("submit", (event) => {
     event.preventDefault();
+    translatedText = "";
     try {
       const result = decodeText(
         $("#decode-input").value,
@@ -401,6 +429,7 @@ function openDecoder() {
       $("#decode-output").textContent =
         result || "Add some text to translate first.";
       $("#decode-output").classList.remove("decode-error");
+      translatedText = result;
     } catch (error) {
       $("#decode-output").textContent =
         error.message === "The string to be decoded is not correctly encoded."
@@ -408,6 +437,7 @@ function openDecoder() {
           : error.message;
       $("#decode-output").classList.add("decode-error");
     }
+    updateUseButton();
   });
 }
 

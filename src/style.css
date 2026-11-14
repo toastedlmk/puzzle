@@ -1592,6 +1592,36 @@ dialog.wide-dialog {
 .decoder-result output.decode-error {
   color: #b77a56;
 }
+.decoder-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid #dce4ce;
+  padding-top: 14px;
+  margin-top: 16px;
+}
+.decoder-use-answer {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+.decoder-use-answer .icon {
+  width: 14px;
+  height: 14px;
+}
+.decoder-use-answer:disabled {
+  opacity: 0.5;
+  background: transparent;
+}
+#decode-use-hint {
+  flex: 1;
+  min-width: 145px;
+  font-size: 10px;
+  line-height: 1.7;
+  color: #7e8d6b;
+}
 .reset-actions {
   display: flex;
   gap: 14px;
