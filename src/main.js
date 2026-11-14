@@ -1,0 +1,537 @@
+import "@fontsource/instrument-serif/latin-400.css";
+import "@fontsource/instrument-serif/latin-400-italic.css";
+import "@fontsource/dm-sans/latin-400.css";
+import "@fontsource/dm-sans/latin-500.css";
+import "@fontsource/dm-sans/latin-600.css";
+import "./style.css";
+import { puzzles, chapters } from "./puzzles.js";
+import {
+  STORAGE_KEY,
+  restoreState,
+  freshState,
+  solvedCount,
+  unlockedIndex,
+  canVisit,
+  submitAnswer,
+  getAddress,
+} from "./engine.js";
+import { decodeText } from "./decoder.js";
+
+const icons = {
+  arrow: '<path d="M4 12h16m-6-6 6 6-6 6"/>',
+  smallArrow: '<path d="M6 18 18 6M6 6h12v12"/>',
+  book: '<path d="M12 6c-3-3-7-3-10-2v15c3-1 7-1 10 2m0-15c3-3 7-3 10-2v15c-3-1-7-1-10 2Zm0 0v15"/>',
+  inspect:
+    '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m9 9-3 3 3 3m6-6 3 3-3 3"/>',
+  lock: '<rect x="6" y="10" width="12" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
+  check: '<path d="m5 12 4 4L19 6"/>',
+  close: '<path d="m6 6 12 12M6 18 18 6"/>',
+  bulb: '<path d="M9 18h6m-6 3h6M8 14a6 6 0 1 1 8 0c-1 1-1 2-1 2H9s0-1-1-2Z"/>',
+  help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 .5c0 2-2.5 2-2.5 4M12 16.5v.1"/>',
+  decoder:
+    '<path d="M4 5h6M7 2v6m-4 4 8 8m0-8-8 8m12-2h6m-6-4h6M15 5h6m-3-3v6"/>',
+  restart: '<path d="M4 10a8 8 0 1 1 1 8M4 4v6h6"/>',
+  pen: '<path d="m14 5 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14v6Z"/>',
+};
+const icon = (name, cls = "") =>
+  `<svg class="icon ${cls}" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${icons[name] || icons.arrow}</svg>`;
+const rosette = `<svg class="rosette" viewBox="0 0 72 72" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="36" cy="36" r="27"/><circle cx="36" cy="36" r="20"/><path d="M36 2v68M2 36h68M12 12l48 48M12 60l48-48M23 5l26 62M5 23l62 26M5 49l62-26M23 67 49 5"/></g><circle cx="36" cy="36" r="6" fill="currentColor"/></svg>`;
+const mark =
+  '<svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M16 1v30M1 16h30M5.4 5.4l21.2 21.2M5.4 26.6 26.6 5.4"/><circle cx="16" cy="16" r="4" fill="currentColor" stroke="none"/></svg>';
+const escapeHtml = (value) =>
+  String(value).replace(
+    /[&<>"']/g,
+    (char) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        char
+      ],
+  );
+const $ = (selector) => document.querySelector(selector);
+const number = (n) => String(n).padStart(3, "0");
+const embedded = globalThis.__AFTERWORD_EMBEDDED__;
+let entryAddress;
+let storage;
+try {
+  storage = window.localStorage;
+} catch {
+  storage = {
+    getItem: () => null,
+    setItem: () => {
+      throw new Error("Storage unavailable");
+    },
+  };
+}
+let state = restoreState(storage, puzzles.length);
+let persisted = true;
+const requested = embedded
+  ? -1
+  : Number(new URL(location.href).searchParams.get("entry")) - 1;
+if (canVisit(state, requested, puzzles.length)) state.current = requested;
+
+$("#app").innerHTML = `
+  <a class="skip-link" href="#puzzle-title">Skip to the riddle</a>
+  <header class="site-header"><div class="header-inner">
+    <a class="wordmark" href="${embedded ? "" : import.meta.env.BASE_URL}" aria-label="The Afterword home"><span class="brand-mark">${mark}</span> the afterword<span class="brand-period">.</span></a>
+    <span class="header-caption">A BROWSER RIDDLE IN 100 ENTRIES</span>
+    <nav class="header-nav" aria-label="Main navigation"><button class="rules-link" data-action="help">The rules ${icon("smallArrow")}</button><button class="progress-button" data-action="index">${icon("book")}<span>Your index</span><span class="header-progress">0 / 100</span></button></nav>
+  </div></header>
+  ${embedded ? '<div class="offline-address"><span>ENTRY ADDRESS</span><output id="entry-address" aria-label="Address clue for this entry"></output><span class="offline-edition">OFFLINE EDITION</span></div>' : ""}
+  <main class="page-shell">
+    <section class="intro" aria-labelledby="intro-title"><div><p class="eyebrow"><span class="little-star">${mark}</span> A SMALL EXERCISE IN CURIOSITY</p><h1 id="intro-title">Look a little <em>closer.</em></h1></div><div class="intro-aside"><p>One hundred entries. A trail of hidden clues.<br>All you need is a different way of looking.</p><svg class="handdrawn-arrow" viewBox="0 0 70 65" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10C36-1 58 14 51 52M39 39l12 14 14-13"/><path d="M8 13C31 5 51 12 52 34" opacity=".35"/></svg></div></section>
+    <div class="game-layout">
+      <aside class="chapter-sidebar" aria-label="Chapters"><div class="sidebar-label">THE CONTENTS <span>01—100</span></div><nav id="chapter-list" aria-label="Chapter navigation"></nav><div id="journey-progress"></div></aside>
+      <section id="puzzle-card" class="puzzle-card" aria-label="Current riddle"></section>
+      <aside class="field-sidebar" aria-label="Notes and tools">
+        <section class="notebook"><div class="notebook-header"><h2>Field notes</h2>${icon("pen")}</div><p class="notebook-description">A thought worth keeping?</p><label class="sr-only" for="field-note">Your private notes for this entry</label><textarea id="field-note" maxlength="5000" placeholder="Follow a thought.\nLeave yourself a clue…" spellcheck="false"></textarea><div class="notebook-footer"><span class="note-entry">ENTRY 001</span><span id="note-status">Saved locally</span></div></section>
+        <section class="pocket-tools"><h2 class="eyebrow">POCKET TOOLS</h2><button data-action="inspect">${icon("inspect")}<span>Inspect this page</span>${icon("smallArrow")}</button><button data-action="decoder">${icon("decoder")}<span>Decoder desk</span>${icon("smallArrow")}</button><button data-action="help">${icon("help")}<span>A little guidance</span>${icon("smallArrow")}</button></section>
+        <div class="patience-note">${rosette}<p>Take your time.<br><em>Wonder a little.</em></p></div>
+      </aside>
+    </div>
+    <footer class="site-footer"><span>A little less scrolling. A little more noticing.</span><span class="save-status"><i></i> YOUR PLACE IS KEPT ON THIS DEVICE</span><span>Made for the curious <span class="footer-star">${mark}</span></span></footer>
+  </main>
+  <dialog id="app-dialog" aria-labelledby="dialog-title"><div class="dialog-shell"><header class="dialog-header"><p class="eyebrow" id="dialog-eyebrow">A LITTLE GUIDANCE</p><button class="icon-button dialog-close" aria-label="Close dialog">${icon("close")}</button></header><div id="dialog-content"></div></div></dialog>
+  <div id="toast" class="toast" role="status"></div>
+`;
+
+function save() {
+  try {
+    storage.setItem(STORAGE_KEY, JSON.stringify(state));
+    persisted = true;
+  } catch {
+    persisted = false;
+  }
+  const label = $(".save-status");
+  label.classList.toggle("not-saved", !persisted);
+  label.innerHTML = `<i></i> ${persisted ? "YOUR PLACE IS KEPT ON THIS DEVICE" : "STORAGE UNAVAILABLE · KEEP THIS TAB OPEN"}`;
+  $("#note-status").textContent = persisted
+    ? "Saved locally"
+    : "In this tab only";
+}
+
+function renderNavigation() {
+  const completed = solvedCount(state);
+  $(".header-progress").textContent = `${completed} / 100`;
+  $("#chapter-list").innerHTML = chapters
+    .map((chapter, i) => {
+      const done = puzzles
+        .slice(i * 20, (i + 1) * 20)
+        .filter((p) => state.solved[p.id]).length;
+      const active = Math.floor(state.current / 20) === i;
+      const locked = i * 20 > unlockedIndex(state);
+      return `<button class="chapter-button ${active ? "active" : ""} ${locked ? "locked" : ""}" data-chapter="${i}" aria-label="Chapter ${i + 1}: ${chapter.title}${locked ? ", locked" : ""}" ${active ? 'aria-current="step"' : ""}><span class="chapter-numeral">${chapter.numeral}.</span><span class="chapter-copy"><strong>${chapter.title}</strong><span>Entries ${number(i * 20 + 1)}—${number((i + 1) * 20)}</span></span>${locked ? icon("lock") : done === 20 ? icon("check") : '<span class="chapter-dot"></span>'}</button>`;
+    })
+    .join("");
+  $("#journey-progress").innerHTML =
+    `<div class="journey-label"><span>YOUR JOURNEY</span><span>${completed}%</span></div><div class="journey-track" role="progressbar" aria-label="Entries solved" aria-valuenow="${completed}" aria-valuemin="0" aria-valuemax="100"><span style="width:${completed}%"></span></div><p><strong>${completed}</strong> of 100 doors opened.</p><span class="journey-footnote">A little further, one entry at a time.</span>`;
+}
+
+function renderArt(puzzle) {
+  const content = puzzle.content;
+  switch (puzzle.type) {
+    case "quote":
+      return `<div class="riddle-quote">${escapeHtml(content)}</div>`;
+    case "code":
+      return `<pre class="riddle-code"><code>${escapeHtml(content)}</code></pre>`;
+    case "lines":
+      return `<div class="riddle-lines">${content.map((line, i) => `<p><span class="line-number" aria-hidden="true">${i + 1}</span>${escapeHtml(line)}</p>`).join("")}</div>`;
+    case "sequence":
+      return `<div class="riddle-sequence">${content.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>`;
+    case "grid":
+    case "polybius":
+      return `${puzzle.type === "polybius" ? '<span class="grid-legend">ROWS ↓ &nbsp; COLUMNS → &nbsp; COUNT FROM 1</span>' : ""}<div class="letter-grid" style="--columns:${content.columns}">${content.cells.map((cell, i) => `<span title="Row ${Math.floor(i / content.columns) + 1}, column ${(i % content.columns) + 1}">${escapeHtml(cell)}</span>`).join("")}</div>${content.caption ? `<div class="grid-caption">${escapeHtml(content.caption)}</div>` : ""}`;
+    case "html":
+      return embedded
+        ? content.replace(
+            'src="/clues/paper-crane.svg"',
+            `src="${embedded.crane}" data-filename="paper-crane.svg"`,
+          )
+        : content.replace(
+            "/clues/paper-crane.svg",
+            `${import.meta.env.BASE_URL}clues/paper-crane.svg`,
+          );
+    default:
+      return "";
+  }
+}
+
+function renderPuzzle(focus = false) {
+  const puzzle = puzzles[state.current];
+  const chapter = chapters[puzzle.chapter];
+  const solved = !!state.solved[puzzle.id];
+  const finished =
+    solvedCount(state) === puzzles.length && puzzle.id === puzzles.length - 1;
+  document.title = `${puzzle.tabClue ? `${puzzle.tabClue} | ` : ""}The Afterword — Entry ${number(puzzle.id + 1)}`;
+  // Standalone files cannot reliably rewrite file:// query strings. An explicit
+  // entry address preserves URL-based clues without navigation or a server.
+  entryAddress = getAddress(
+    puzzle,
+    embedded ? "file:///the-afterword.html" : location.href,
+  );
+  if (embedded) {
+    $("#entry-address").textContent =
+      `the-afterword.html${entryAddress.search}${entryAddress.hash}`;
+  } else {
+    history.replaceState(null, "", entryAddress);
+  }
+  const prompt = embedded
+    ? puzzle.prompt.replace("your address bar", "the entry address shown above")
+    : puzzle.prompt;
+  $("#puzzle-card").innerHTML = `
+    <div class="card-topline"><span class="entry-label"><span class="status-dot ${solved ? "solved" : ""}"></span> ENTRY ${number(puzzle.id + 1)}</span><span class="category-label">${escapeHtml(chapter.category)} <span>↗</span></span></div>
+    <div class="card-body"><div class="entry-overline">CHAPTER ${chapter.numeral} <span>·</span> ${escapeHtml(chapter.title)}</div><h2 id="puzzle-title" tabindex="-1">${escapeHtml(puzzle.title)}<span class="title-period">.</span></h2><p class="puzzle-prompt">${escapeHtml(prompt)}</p>
+    <div id="clue-panel" class="clue-panel clue-${puzzle.type}">${renderArt(puzzle)}</div>
+    ${
+      solved
+        ? `
+      <section class="solved-panel ${finished ? "final-panel" : ""}" aria-label="Entry solved"><div class="solved-heading"><span class="solved-check">${icon("check")}</span><div><span class="eyebrow">${finished ? "ALL ONE HUNDRED DOORS, OPEN" : "THE DOOR IS OPEN"}</span><h3>${finished ? "You followed the thread." : puzzle.id % 20 === 19 ? "A chapter, complete." : "A little closer."}</h3></div>${finished ? rosette : ""}</div><p>${escapeHtml(puzzle.explanation)}</p><div class="solution-word">THE ANSWER <strong>${escapeHtml(puzzle.answers[0])}</strong></div>${finished ? `<p class="final-note">Thank you for looking a little closer. ${Object.values(state.hints).reduce((a, b) => a + b, 0)} hints along the way. A hundred small discoveries.</p><button class="primary-button" data-action="index">Revisit the journey ${icon("book")}</button><button class="text-button share-button" data-action="share">Copy your result ${icon("smallArrow")}</button>` : `<button class="primary-button next-button" id="next-entry">${puzzle.id % 20 === 19 ? "Begin the next chapter" : "The next entry"} ${icon("arrow")}</button>`}</section>
+    `
+        : `
+      <form id="answer-form" novalidate><div class="answer-label-row"><label class="eyebrow" for="answer">YOUR ANSWER</label><span class="input-caption">a little thought goes a long way</span></div><div class="answer-control"><input id="answer" name="answer" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="200" placeholder="What do you think?" aria-describedby="answer-feedback"><button type="submit" class="submit-button">Enter ${icon("arrow")}</button></div><p id="answer-feedback" class="answer-feedback" role="status" aria-live="polite"></p></form>
+      <div class="hint-container"><div class="hint-controls"><button id="hint-button" class="text-button">${icon("bulb")}<span>A gentle nudge</span></button><span class="hint-counter"></span></div><div id="hint-list" aria-live="polite"></div></div>
+    `
+    }</div>
+    <div class="card-footer"><span><span class="tiny-star">${mark}</span> ${solved ? "CURIOSITY LOOKS GOOD ON YOU" : "THE PAGE IS PART OF THE PUZZLE"}</span><button class="small-link" data-action="inspect">Look around ${icon("smallArrow")}</button></div>`;
+  const note = $("#field-note");
+  note.value = state.notes[puzzle.id] || "";
+  note.setAttribute(
+    "aria-label",
+    `Your private notes for entry ${number(puzzle.id + 1)}`,
+  );
+  $(".note-entry").textContent = `ENTRY ${number(puzzle.id + 1)}`;
+  renderNavigation();
+  if (!solved) {
+    renderHints();
+    $("#answer-form").addEventListener("submit", onAnswer);
+    $("#answer").addEventListener("input", () => {
+      $("#answer").removeAttribute("aria-invalid");
+      $(".answer-control").classList.remove("has-error");
+      $("#answer-feedback").textContent = "";
+    });
+    $("#hint-button").addEventListener("click", () => {
+      state.hints[puzzle.id] = Math.min(3, (state.hints[puzzle.id] || 0) + 1);
+      save();
+      renderHints();
+    });
+  } else if (!finished) {
+    $("#next-entry").addEventListener("click", () => visit(puzzle.id + 1));
+  }
+  $(".lift-paper")?.addEventListener("click", (event) => {
+    $(".concealed-word").classList.toggle("uncovered");
+    event.currentTarget.textContent = $(".concealed-word").classList.contains(
+      "uncovered",
+    )
+      ? "Replace the paper ↘"
+      : "Lift the paper ↗";
+  });
+  $(".clue-mark")?.addEventListener("click", (event) => {
+    let tooltip = $("#mark-tooltip");
+    if (!tooltip) {
+      tooltip = document.createElement("p");
+      tooltip.id = "mark-tooltip";
+      tooltip.className = "mark-tooltip";
+      event.currentTarget.after(tooltip);
+    }
+    tooltip.textContent = event.currentTarget.title;
+  });
+  if (focus) $("#puzzle-title").focus({ preventScroll: true });
+}
+
+function renderHints() {
+  const puzzle = puzzles[state.current];
+  const count = state.hints[puzzle.id] || 0;
+  $("#hint-list").innerHTML = puzzle.hints
+    .slice(0, count)
+    .map(
+      (hint, i) =>
+        `<p class="hint-note"><span>${i === 2 ? "THE ANSWER" : `NUDGE ${i + 1}`}</span>${escapeHtml(hint)}</p>`,
+    )
+    .join("");
+  $(".hint-counter").textContent = `${count} OF 3`;
+  $("#hint-button span").textContent =
+    count === 0
+      ? "A gentle nudge"
+      : count === 1
+        ? "A little more help"
+        : count === 2
+          ? "Reveal the answer"
+          : "No more secrets";
+  $("#hint-button").disabled = count === 3;
+}
+
+function onAnswer(event) {
+  event.preventDefault();
+  const answer = $("#answer");
+  const result = submitAnswer(state, puzzles[state.current], answer.value);
+  if (result.status === "empty") {
+    $("#answer-feedback").textContent =
+      "Every door needs a word. Try an answer first.";
+    answer.focus();
+    return;
+  }
+  save();
+  if (result.status === "correct") {
+    renderPuzzle(true);
+    return;
+  }
+  if (result.status === "incorrect") {
+    $("#answer-feedback").textContent =
+      "Not quite. Take another look — the door is still waiting.";
+    answer.setAttribute("aria-invalid", "true");
+    $(".answer-control").classList.add("has-error");
+    answer.focus();
+    answer.select();
+  }
+}
+
+function visit(index) {
+  if (!canVisit(state, index, puzzles.length)) {
+    showToast("One door at a time. Solve your current entry to go further.");
+    return;
+  }
+  state.current = index;
+  save();
+  if ($("#app-dialog").open) $("#app-dialog").close();
+  renderPuzzle(true);
+  if (window.innerWidth < 1050)
+    $("#puzzle-card").scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "instant"
+        : "smooth",
+      block: "start",
+    });
+}
+
+function showToast(message) {
+  const toast = $("#toast");
+  toast.textContent = message;
+  toast.classList.add("visible");
+  clearTimeout(showToast.timeout);
+  showToast.timeout = setTimeout(() => toast.classList.remove("visible"), 4500);
+}
+
+function dialog(title, eyebrow, body, wide = false) {
+  $("#dialog-eyebrow").textContent = eyebrow;
+  $("#dialog-content").innerHTML = `<h2 id="dialog-title">${title}</h2>${body}`;
+  $("#app-dialog").classList.toggle("wide-dialog", wide);
+  if (!$("#app-dialog").open) $("#app-dialog").showModal();
+}
+
+function openIndex(chapter = Math.floor(state.current / 20)) {
+  dialog(
+    'Your index<span class="title-period">.</span>',
+    `${solvedCount(state)} OF 100 DOORS OPENED`,
+    `
+    <p class="dialog-lede">Every answer leaves a little mark. Revisit any open entry.</p>
+    <div class="index-tabs" role="tablist" aria-label="Chapters">${chapters.map((c, i) => `<button role="tab" tabindex="${i === chapter ? 0 : -1}" aria-selected="${i === chapter}" id="chapter-tab-${i}" aria-controls="index-panel" data-index-chapter="${i}" class="${i === chapter ? "selected" : ""}">${c.numeral}<span>${c.title}</span></button>`).join("")}</div>
+    <div id="index-panel" role="tabpanel" aria-labelledby="chapter-tab-${chapter}" class="index-list">${puzzles
+      .slice(chapter * 20, (chapter + 1) * 20)
+      .map((p) => {
+        const solved = !!state.solved[p.id];
+        const open = canVisit(state, p.id);
+        return `<button class="index-entry ${solved ? "complete" : ""} ${p.id === state.current ? "current" : ""}" data-visit="${p.id}" ${!open ? "disabled" : ""}><span class="index-number">${number(p.id + 1)}</span><span class="index-title">${escapeHtml(p.title)}</span><span class="index-answer">${solved ? escapeHtml(p.answers[0]) : open ? "your next door" : "not yet"}</span>${icon(solved ? "check" : open ? "arrow" : "lock")}</button>`;
+      })
+      .join("")}</div>
+    <div class="index-bottom"><p>Your progress and notes stay in this browser.</p><button class="text-button reset-link" data-action="reset">${icon("restart")} Start over</button></div>
+  `,
+    true,
+  );
+}
+
+function openHelp() {
+  dialog(
+    'A different way of looking<span class="title-period">.</span>',
+    "A NOTE BEFORE YOU BEGIN",
+    `
+    <p class="dialog-lede">No hurry. No timer. Just you, a page, and what you notice.</p>
+    <ol class="rules-list"><li><span>01</span><div><h3>Read closely.</h3><p>Every entry has a word, phrase, or number for an answer. Wording, patterns, and tiny details all matter. Capitalization, spaces, and punctuation in your answers do not.</p></div></li><li><span>02</span><div><h3>Look around the page.</h3><p>Later clues live in image descriptions, HTML comments, styles, or the address bar. “Inspect this page” puts those details within reach, on desktop and mobile.</p></div></li><li><span>03</span><div><h3>Bring a little help.</h3><p>The decoder desk translates common encodings. Field notes keep your thoughts for each entry. A gentle nudge offers up to three hints; the last one reveals the answer.</p></div></li><li><span>04</span><div><h3>Follow your thread.</h3><p>Solve an entry to open the next. Your index remembers every solved answer. Progress saves in this browser, so return whenever curiosity calls.</p></div></li></ol>
+    <div class="help-footnote">An original collection inspired by the tradition of browser riddles. No accounts. No downloads. A hundred little discoveries.</div><button class="primary-button" data-action="close">Back to the riddle ${icon("arrow")}</button>
+  `,
+  );
+}
+
+function openInspector(tab = "source") {
+  dialog(
+    'Behind the paper<span class="title-period">.</span>',
+    `THE PAGE INSPECTOR · ENTRY ${number(state.current + 1)}`,
+    `
+    <p class="dialog-lede">The page is part of the puzzle. Here is what lies beneath its ink.</p>
+    <div class="inspector-tabs" role="tablist" aria-label="Inspector view"><button id="source-tab" role="tab" tabindex="${tab === "source" ? 0 : -1}" aria-controls="inspector-panel" aria-selected="${tab === "source"}" data-inspector-tab="source" class="${tab === "source" ? "selected" : ""}">Page source</button><button id="details-tab" role="tab" tabindex="${tab === "details" ? 0 : -1}" aria-controls="inspector-panel" aria-selected="${tab === "details"}" data-inspector-tab="details" class="${tab === "details" ? "selected" : ""}">Page details</button></div>
+    <div id="inspector-panel" role="tabpanel" aria-labelledby="${tab}-tab"></div><p class="inspector-footnote">Only the current entry’s clue is shown here. Some pages have nothing to hide.</p>
+  `,
+    true,
+  );
+  const panel = $("#inspector-panel");
+  if (tab === "source") {
+    panel.innerHTML = '<pre class="inspector-source"><code></code></pre>';
+    panel.querySelector("code").textContent = $(
+      "#clue-panel",
+    ).innerHTML.replace(/></g, ">\n<");
+  } else {
+    const p = puzzles[state.current];
+    const descriptions = [
+      ...$("#clue-panel").querySelectorAll("[alt], [aria-label], [title]"),
+    ].map(
+      (node) =>
+        node.getAttribute("alt") ||
+        node.getAttribute("aria-label") ||
+        node.getAttribute("title"),
+    );
+    const styles = [...$("#clue-panel").querySelectorAll("[style]")].map(
+      (node) => node.getAttribute("style"),
+    );
+    panel.innerHTML = `<dl class="page-details"><dt>Tab title</dt><dd>${escapeHtml(document.title)}</dd><dt>${embedded ? "Entry address" : "Page address"}</dt><dd class="address-detail">${escapeHtml(entryAddress.href)}</dd><dt>Accessible descriptions & tooltips</dt><dd>${descriptions.length ? descriptions.map(escapeHtml).join("<br>") : "No additional descriptions on this entry."}</dd><dt>Clue-specific styles</dt><dd><code>${escapeHtml([...(p.styleClue ? [p.styleClue] : []), ...styles].join("\n") || "No additional style clues on this entry.")}</code></dd></dl>`;
+  }
+}
+
+function openDecoder() {
+  dialog(
+    'The decoder desk<span class="title-period">.</span>',
+    "A LITTLE HELP WITH TRANSLATION",
+    `
+    <p class="dialog-lede">Change the language. Keep the curiosity. This desk translates text; it never runs code.</p><form id="decoder-form"><label for="decode-method" class="eyebrow form-label">TRANSLATION</label><select id="decode-method"><option value="base64">Base64 → text</option><option value="binary">Binary ASCII → text</option><option value="hex">Hexadecimal ASCII → text</option><option value="ascii">Decimal ASCII → text</option><option value="alphabet">Alphabet positions (A = 1)</option><option value="rot13">ROT13</option><option value="caesar1">Caesar: move back 1</option><option value="caesar2">Caesar: move back 2</option><option value="url">URL percent-decoding</option><option value="reverse">Reverse text</option></select><label class="eyebrow form-label" for="decode-input">THE CODED TEXT</label><textarea id="decode-input" rows="4" maxlength="5000" placeholder="Paste or type a small mystery…" spellcheck="false"></textarea><button class="primary-button" type="submit">Translate ${icon("arrow")}</button><div class="decoder-result" aria-live="polite"><span class="eyebrow">THE OTHER SIDE</span><output id="decode-output">Your translation will appear here.</output></div></form>
+  `,
+  );
+  $("#decoder-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    try {
+      const result = decodeText(
+        $("#decode-input").value,
+        $("#decode-method").value,
+      );
+      $("#decode-output").textContent =
+        result || "Add some text to translate first.";
+      $("#decode-output").classList.remove("decode-error");
+    } catch (error) {
+      $("#decode-output").textContent =
+        error.message === "The string to be decoded is not correctly encoded."
+          ? "That does not look like valid Base64. Check the letters and padding."
+          : error.message;
+      $("#decode-output").classList.add("decode-error");
+    }
+  });
+}
+
+function openReset() {
+  dialog(
+    'A fresh piece of paper<span class="title-period">.</span>',
+    "START AGAIN?",
+    `<p class="dialog-lede">This clears all 100 entries, hints, and field notes from this browser. Your current journey cannot be recovered.</p><div class="reset-actions"><button class="primary-button danger-button" id="confirm-reset">Clear my journey</button><button class="secondary-button" data-action="index">Keep my place</button></div>`,
+  );
+  $("#confirm-reset").addEventListener("click", () => {
+    state = freshState();
+    save();
+    $("#app-dialog").close();
+    renderPuzzle(true);
+    showToast("A fresh beginning. Your journey has been reset.");
+  });
+}
+
+document.addEventListener("click", (event) => {
+  const action = event.target.closest("[data-action]")?.dataset.action;
+  if (action === "help") openHelp();
+  if (action === "index") openIndex();
+  if (action === "inspect") openInspector();
+  if (action === "decoder") openDecoder();
+  if (action === "reset") openReset();
+  if (action === "close") $("#app-dialog").close();
+  if (action === "share") {
+    const message = `I opened all 100 doors in The Afterword — an original browser riddle. ${Object.values(state.hints).reduce((a, b) => a + b, 0)} hints, a hundred discoveries.`;
+    if (navigator.clipboard?.writeText)
+      navigator.clipboard
+        .writeText(message)
+        .then(() =>
+          showToast("Your result is copied. Pass a little curiosity along."),
+        )
+        .catch(() => showShareText(message));
+    else showShareText(message);
+  }
+  const chapter = event.target.closest("[data-chapter]");
+  if (chapter) openIndex(Number(chapter.dataset.chapter));
+  const indexChapter = event.target.closest("[data-index-chapter]");
+  if (indexChapter) {
+    openIndex(Number(indexChapter.dataset.indexChapter));
+    $(`#chapter-tab-${indexChapter.dataset.indexChapter}`).focus();
+  }
+  const entry = event.target.closest("[data-visit]");
+  if (entry && !entry.disabled) visit(Number(entry.dataset.visit));
+  const tab = event.target.closest("[data-inspector-tab]");
+  if (tab) {
+    openInspector(tab.dataset.inspectorTab);
+    $(`#${tab.dataset.inspectorTab}-tab`).focus();
+  }
+});
+
+function showShareText(message) {
+  dialog(
+    'Pass it along<span class="title-period">.</span>',
+    "YOUR FINISHED JOURNEY",
+    '<p class="dialog-lede">Copy the text below to share your result.</p><textarea id="share-text" rows="4" readonly aria-label="Your result to copy"></textarea>',
+  );
+  $("#share-text").value = message;
+  $("#share-text").select();
+}
+
+$("#field-note").addEventListener("input", (event) => {
+  state.notes[state.current] = event.target.value;
+  save();
+});
+$(".wordmark").addEventListener("click", (event) => {
+  event.preventDefault();
+  visit(unlockedIndex(state));
+});
+$(".skip-link").addEventListener("click", (event) => {
+  event.preventDefault();
+  $("#puzzle-title").focus();
+  $("#puzzle-title").scrollIntoView({ block: "start" });
+});
+$(".dialog-close").addEventListener("click", () => $("#app-dialog").close());
+$("#app-dialog").addEventListener("click", (event) => {
+  if (event.target === $("#app-dialog")) $("#app-dialog").close();
+});
+document.addEventListener("keydown", (event) => {
+  if (
+    event.target.matches('[role="tab"]') &&
+    ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
+  ) {
+    event.preventDefault();
+    const tabs = [
+      ...event.target
+        .closest('[role="tablist"]')
+        .querySelectorAll('[role="tab"]'),
+    ];
+    const current = tabs.indexOf(event.target);
+    const target =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? tabs.length - 1
+          : (current + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) %
+            tabs.length;
+    tabs[target].click();
+  }
+  if (
+    event.key === "?" &&
+    !["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName) &&
+    !$("#app-dialog").open
+  ) {
+    event.preventDefault();
+    openHelp();
+  }
+});
+window.addEventListener("popstate", () => {
+  const index = Number(new URL(location.href).searchParams.get("entry")) - 1;
+  if (canVisit(state, index)) {
+    state.current = index;
+    renderPuzzle(true);
+  }
+});
+// Keep progress coherent if another tab finishes an entry or resets the journey.
+window.addEventListener("storage", (event) => {
+  if (event.key === STORAGE_KEY) {
+    state = restoreState(storage, puzzles.length);
+    renderPuzzle();
+    showToast("Your journey was updated in another tab.");
+  }
+});
+renderPuzzle();
+save();
