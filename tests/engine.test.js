@@ -6,6 +6,8 @@ import {
   isCorrect,
   freshState,
   submitAnswer,
+  redoQuestion,
+  solvedCount,
   canVisit,
   restoreState,
   STORAGE_KEY,
@@ -109,6 +111,66 @@ test("broken storage recovers; noncontiguous progress and future deep links cann
   assert.equal(restored.notes[0], "a note");
   assert.equal(restored.notes[2], undefined);
   assert.equal(restored.attempts[0], undefined);
+});
+
+test("redoing a completed entry preserves earned progress and original statistics across reloads", () => {
+  const state = freshState();
+  submitAnswer(state, puzzles[0], "what");
+  submitAnswer(state, puzzles[1], "star");
+  state.hints[0] = 2;
+  state.notes[0] = "A note to keep.";
+  const solved = structuredClone(state.solved);
+  const attempts = state.attempts[0];
+  assert.equal(redoQuestion(state, 0), true);
+  assert.equal(solvedCount(state), 2);
+  assert.ok(canVisit(state, 2));
+  assert.equal(submitAnswer(state, puzzles[0], "wrong").status, "incorrect");
+  assert.equal(state.redos[0].attempts, 1);
+  state.redos[0].hints = 1;
+  const restored = restoreState({ getItem: () => JSON.stringify(state) }, 100);
+  assert.deepEqual(restored.redos[0], { hints: 1, attempts: 1 });
+  assert.equal(restored.hints[0], 2);
+  assert.equal(restored.notes[0], "A note to keep.");
+  assert.equal(submitAnswer(restored, puzzles[0], "WHAT").status, "correct");
+  assert.equal(restored.redos[0], undefined);
+  assert.equal(solvedCount(restored), 2);
+  assert.deepEqual(restored.solved, solved);
+  assert.equal(restored.attempts[0], attempts);
+  assert.equal(
+    submitAnswer(restored, puzzles[0], "what").status,
+    "already-solved",
+  );
+  assert.equal(redoQuestion(restored, 3), false);
+  assert.equal(redoQuestion(restored, -1), false);
+});
+
+test("redoing an unsolved question resets that attempt and preserves notes", () => {
+  const state = freshState();
+  state.hints[0] = 3;
+  state.notes[0] = "Keep these thoughts.";
+  submitAnswer(state, puzzles[0], "wrong");
+  assert.equal(redoQuestion(state, 0), true);
+  assert.equal(state.hints[0], 0);
+  assert.equal(state.attempts[0], 0);
+  assert.equal(state.notes[0], "Keep these thoughts.");
+  assert.deepEqual(state.redos, {});
+  assert.equal(solvedCount(state), 0);
+  assert.equal(submitAnswer(state, puzzles[0], "what").status, "correct");
+  assert.equal(solvedCount(state), 1);
+});
+
+test("restoring retries clamps malformed counts and ignores retries for unearned entries", () => {
+  const state = freshState();
+  state.solved[0] = { at: 1 };
+  state.redos = {
+    0: { hints: 100, attempts: 999999999 },
+    1: { hints: 0, attempts: 0 },
+    99: { hints: 0, attempts: 0 },
+  };
+  const restored = restoreState({ getItem: () => JSON.stringify(state) }, 100);
+  assert.deepEqual(restored.redos, { 0: { hints: 3, attempts: 100000 } });
+  assert.equal(solvedCount(restored), 1);
+  assert.ok(!canVisit(restored, 99));
 });
 
 test("per-entry address clues appear only on their intended entry", () => {

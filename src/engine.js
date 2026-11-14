@@ -24,6 +24,7 @@ export function freshState() {
     hints: {},
     attempts: {},
     notes: {},
+    redos: {},
     startedAt: Date.now(),
   };
 }
@@ -46,6 +47,21 @@ export function restoreState(storage, count) {
     for (let i = 0; i < count; i++) {
       if (!data.solved?.[i] || typeof data.solved[i] !== "object") break;
       fallback.solved[i] = { at: Number(data.solved[i].at) || 0 };
+    }
+    for (let i = 0; i < count; i++) {
+      const redo = data.redos?.[i];
+      if (fallback.solved[i] && redo && typeof redo === "object") {
+        fallback.redos[i] = {
+          hints:
+            Number.isInteger(redo.hints) && redo.hints >= 0
+              ? Math.min(redo.hints, 3)
+              : 0,
+          attempts:
+            Number.isInteger(redo.attempts) && redo.attempts >= 0
+              ? Math.min(redo.attempts, 100000)
+              : 0,
+        };
+      }
     }
     fallback.current = Math.max(
       0,
@@ -78,13 +94,31 @@ export function canVisit(state, index, count = 100) {
 }
 
 export function submitAnswer(state, puzzle, value) {
-  if (state.solved[puzzle.id]) return { status: "already-solved" };
+  const redo = state.redos?.[puzzle.id];
+  if (state.solved[puzzle.id] && !redo) return { status: "already-solved" };
   if (!String(value).trim()) return { status: "empty" };
   if (!canVisit(state, puzzle.id)) return { status: "locked" };
-  state.attempts[puzzle.id] = (state.attempts[puzzle.id] || 0) + 1;
+  if (redo) redo.attempts++;
+  else state.attempts[puzzle.id] = (state.attempts[puzzle.id] || 0) + 1;
   if (!isCorrect(puzzle, value)) return { status: "incorrect" };
+  if (redo) {
+    delete state.redos[puzzle.id];
+    return { status: "correct" };
+  }
   state.solved[puzzle.id] = { at: Date.now() };
   return { status: "correct" };
+}
+
+export function redoQuestion(state, index, count = 100) {
+  if (!canVisit(state, index, count)) return false;
+  if (state.solved[index]) {
+    state.redos ||= {};
+    state.redos[index] = { hints: 0, attempts: 0 };
+  } else {
+    state.hints[index] = 0;
+    state.attempts[index] = 0;
+  }
+  return true;
 }
 
 export function getAddress(puzzle, base) {

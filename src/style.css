@@ -497,8 +497,19 @@ button:not(:disabled):active {
 }
 .clue-toolbar {
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
   margin: 20px 0 7px;
+}
+.redo-badge {
+  padding: 3px 5px;
+  border: 1px solid #d5ddc6;
+  border-radius: 3px;
+  font-size: 7px;
+  letter-spacing: 0.7px;
+  color: #72845e;
+  background: #f0f4e6;
 }
 .clue-toolbar + .clue-panel {
   margin-top: 0;

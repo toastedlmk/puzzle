@@ -13,6 +13,7 @@ import {
   unlockedIndex,
   canVisit,
   submitAnswer,
+  redoQuestion,
   getAddress,
 } from "./engine.js";
 import { decodeText } from "./decoder.js";
@@ -159,7 +160,8 @@ function renderArt(puzzle) {
 function renderPuzzle(focus = false) {
   const puzzle = puzzles[state.current];
   const chapter = chapters[puzzle.chapter];
-  const solved = !!state.solved[puzzle.id];
+  const redoing = !!state.redos[puzzle.id];
+  const solved = !!state.solved[puzzle.id] && !redoing;
   const finished =
     solvedCount(state) === puzzles.length && puzzle.id === puzzles.length - 1;
   document.title = `${puzzle.tabClue ? `${puzzle.tabClue} | ` : ""}The Afterword — Entry ${number(puzzle.id + 1)}`;
@@ -179,9 +181,9 @@ function renderPuzzle(focus = false) {
     ? puzzle.prompt.replace("your address bar", "the entry address shown above")
     : puzzle.prompt;
   $("#puzzle-card").innerHTML = `
-    <div class="card-topline"><span class="entry-label"><span class="status-dot ${solved ? "solved" : ""}"></span> ENTRY ${number(puzzle.id + 1)}</span><span class="category-label">${escapeHtml(chapter.category)} <span>↗</span></span></div>
+    <div class="card-topline"><span class="entry-label"><span class="status-dot ${solved ? "solved" : ""}"></span> ENTRY ${number(puzzle.id + 1)}${redoing ? '<span class="redo-badge">REDO</span>' : ""}</span><span class="category-label">${escapeHtml(chapter.category)} <span>↗</span></span></div>
     <div class="card-body"><div class="entry-overline">CHAPTER ${chapter.numeral} <span>·</span> ${escapeHtml(chapter.title)}</div><h2 id="puzzle-title" tabindex="-1">${escapeHtml(puzzle.title)}<span class="title-period">.</span></h2><p class="puzzle-prompt">${escapeHtml(prompt)}</p>
-    <div class="clue-toolbar"><button id="copy-clue" class="copy-button" type="button" data-copy-label="Copy text">${icon("copy")} <span class="copy-label" aria-live="polite">Copy text</span></button></div>
+    <div class="clue-toolbar"><button id="redo-question" class="copy-button" type="button" title="Start a fresh attempt. Your overall progress and field notes are kept.">${icon("restart")} Redo question</button><button id="copy-clue" class="copy-button" type="button" data-copy-label="Copy text">${icon("copy")} <span class="copy-label" aria-live="polite">Copy text</span></button></div>
     <div id="clue-panel" class="clue-panel clue-${puzzle.type}">${renderArt(puzzle)}</div>
     ${
       solved
@@ -202,6 +204,13 @@ function renderPuzzle(focus = false) {
   );
   $(".note-entry").textContent = `ENTRY ${number(puzzle.id + 1)}`;
   renderNavigation();
+  $("#redo-question").addEventListener("click", () => {
+    if (!redoQuestion(state, puzzle.id, puzzles.length)) return;
+    save();
+    renderPuzzle();
+    $("#answer").focus();
+    showToast("Fresh attempt started. Your progress and notes are kept.");
+  });
   $("#copy-clue").addEventListener("click", () => {
     const text = getClueText(puzzle);
     if (text) copyText(text, "Text copied.", $("#copy-clue"));
@@ -219,7 +228,10 @@ function renderPuzzle(focus = false) {
       $("#answer-feedback").textContent = "";
     });
     $("#hint-button").addEventListener("click", () => {
-      state.hints[puzzle.id] = Math.min(3, (state.hints[puzzle.id] || 0) + 1);
+      const redo = state.redos[puzzle.id];
+      if (redo) redo.hints = Math.min(3, redo.hints + 1);
+      else
+        state.hints[puzzle.id] = Math.min(3, (state.hints[puzzle.id] || 0) + 1);
       save();
       renderHints();
     });
@@ -249,7 +261,7 @@ function renderPuzzle(focus = false) {
 
 function renderHints() {
   const puzzle = puzzles[state.current];
-  const count = state.hints[puzzle.id] || 0;
+  const count = state.redos[puzzle.id]?.hints ?? state.hints[puzzle.id] ?? 0;
   $("#hint-list").innerHTML = puzzle.hints
     .slice(0, count)
     .map(
