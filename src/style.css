@@ -495,6 +495,38 @@ button:not(:disabled):active {
   text-align: center;
   color: #344b3c;
 }
+.clue-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 20px 0 7px;
+}
+.clue-toolbar + .clue-panel {
+  margin-top: 0;
+}
+.copy-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 6px 9px;
+  min-height: 29px;
+  border: 1px solid #d8dfcc;
+  border-radius: 3px;
+  color: #637950;
+  background: #fbfcf4;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.copy-button .icon {
+  width: 13px;
+  height: 13px;
+}
+.copy-button:hover:not(:disabled) {
+  background: #edf2e3;
+}
+.copy-button:disabled {
+  opacity: 0.45;
+}
 .clue-panel:before,
 .clue-panel:after {
   content: "+";
@@ -1548,7 +1580,8 @@ dialog.wide-dialog {
 }
 #decode-method,
 #decode-input,
-#share-text {
+#share-text,
+#copy-text {
   border: 1px solid #d5ddc7;
   background: #fcfcf5;
   border-radius: 3px;
@@ -1562,7 +1595,8 @@ dialog.wide-dialog {
   appearance: auto;
 }
 #decode-input,
-#share-text {
+#share-text,
+#copy-text {
   font-family: var(--mono);
   font-size: 12px;
   resize: vertical;
@@ -1579,6 +1613,54 @@ dialog.wide-dialog {
 .decoder-result > .eyebrow {
   font-size: 8px;
   color: #93a17e;
+}
+.decoder-result-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.decoder-result-heading .eyebrow {
+  font-size: 8px;
+  color: #7d8f69;
+}
+.decoder-method-help {
+  margin: 10px 0 0;
+  color: #7c8b6d;
+  font-size: 11px;
+  line-height: 1.8;
+}
+.decoder-settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 17px 0;
+  padding: 15px;
+  border: 1px solid #dee5d1;
+  border-radius: 3px;
+  background: #f3f5eb;
+}
+.decoder-settings[hidden] {
+  display: none;
+}
+.decoder-settings label {
+  flex: 1;
+  min-width: 110px;
+  font-size: 10px;
+  color: #71845f;
+  line-height: 1.7;
+}
+.decoder-settings input,
+.decoder-settings select {
+  display: block;
+  width: 100%;
+  margin-top: 7px;
+  border: 1px solid #cfdabc;
+  border-radius: 3px;
+  padding: 9px 10px;
+  color: #425f35;
+  background: #fcfcf6;
+  font-size: 12px;
 }
 .decoder-result output {
   font-family: var(--mono);

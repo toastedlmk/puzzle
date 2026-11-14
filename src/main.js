@@ -16,6 +16,7 @@ import {
   getAddress,
 } from "./engine.js";
 import { decodeText } from "./decoder.js";
+import { translationMethods } from "./translation-methods.js";
 
 const icons = {
   arrow: '<path d="M4 12h16m-6-6 6 6-6 6"/>',
@@ -32,6 +33,7 @@ const icons = {
     '<path d="M4 5h6M7 2v6m-4 4 8 8m0-8-8 8m12-2h6m-6-4h6M15 5h6m-3-3v6"/>',
   restart: '<path d="M4 10a8 8 0 1 1 1 8M4 4v6h6"/>',
   pen: '<path d="m14 5 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14v6Z"/>',
+  copy: '<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
 };
 const icon = (name, cls = "") =>
   `<svg class="icon ${cls}" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${icons[name] || icons.arrow}</svg>`;
@@ -179,6 +181,7 @@ function renderPuzzle(focus = false) {
   $("#puzzle-card").innerHTML = `
     <div class="card-topline"><span class="entry-label"><span class="status-dot ${solved ? "solved" : ""}"></span> ENTRY ${number(puzzle.id + 1)}</span><span class="category-label">${escapeHtml(chapter.category)} <span>↗</span></span></div>
     <div class="card-body"><div class="entry-overline">CHAPTER ${chapter.numeral} <span>·</span> ${escapeHtml(chapter.title)}</div><h2 id="puzzle-title" tabindex="-1">${escapeHtml(puzzle.title)}<span class="title-period">.</span></h2><p class="puzzle-prompt">${escapeHtml(prompt)}</p>
+    <div class="clue-toolbar"><button id="copy-clue" class="copy-button" type="button" data-copy-label="Copy clue">${icon("copy")} <span class="copy-label" aria-live="polite">Copy clue</span></button></div>
     <div id="clue-panel" class="clue-panel clue-${puzzle.type}">${renderArt(puzzle)}</div>
     ${
       solved
@@ -199,6 +202,14 @@ function renderPuzzle(focus = false) {
   );
   $(".note-entry").textContent = `ENTRY ${number(puzzle.id + 1)}`;
   renderNavigation();
+  $("#copy-clue").addEventListener("click", () => {
+    const text = getClueText(puzzle);
+    if (text) copyText(text, "Clue copied.", $("#copy-clue"));
+    else
+      showToast(
+        "This clue is visual. Look at its page details in the inspector.",
+      );
+  });
   if (!solved) {
     renderHints();
     $("#answer-form").addEventListener("submit", onAnswer);
@@ -309,6 +320,88 @@ function showToast(message) {
   showToast.timeout = setTimeout(() => toast.classList.remove("visible"), 4500);
 }
 
+function getClueText(puzzle) {
+  if (Array.isArray(puzzle.content))
+    return puzzle.content.join(puzzle.type === "lines" ? "\n" : " ");
+  if (puzzle.type === "polybius") return puzzle.content.caption;
+  if (puzzle.type === "grid") {
+    const { cells, columns } = puzzle.content;
+    return Array.from({ length: Math.ceil(cells.length / columns) }, (_, row) =>
+      cells.slice(row * columns, (row + 1) * columns).join(" "),
+    ).join("\n");
+  }
+  if (puzzle.type !== "html") return String(puzzle.content);
+  // Only rendered text belongs on the clipboard. Do not reveal hidden elements,
+  // HTML comments, image descriptions, or tooltips while copying a visible clue.
+  const walker = document.createTreeWalker(
+    $("#clue-panel"),
+    NodeFilter.SHOW_TEXT,
+  );
+  const parts = [];
+  while (walker.nextNode()) {
+    const parent = walker.currentNode.parentElement;
+    if (
+      !parent.closest("button, svg, summary, [hidden]") &&
+      parent.getClientRects().length &&
+      getComputedStyle(parent).visibility !== "hidden"
+    ) {
+      parts.push(walker.currentNode.textContent.trim());
+    }
+  }
+  return parts.filter(Boolean).join(" ");
+}
+
+async function copyText(text, message, button) {
+  function confirmCopy() {
+    showToast(message);
+    const label = button?.querySelector(".copy-label");
+    if (label) {
+      label.textContent = "Copied!";
+      clearTimeout(button.copyFeedbackTimer);
+      button.copyFeedbackTimer = setTimeout(() => {
+        if (button.isConnected) label.textContent = button.dataset.copyLabel;
+      }, 1800);
+    }
+  }
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      confirmCopy();
+      return;
+    }
+  } catch {
+    /* Try the browser's selection-based copy below. */
+  }
+  const focused = document.activeElement;
+  const area = document.createElement("textarea");
+  area.value = text;
+  area.setAttribute("aria-label", "Text to copy");
+  area.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0";
+  ($("#app-dialog").open ? $(".dialog-shell") : document.body).append(area);
+  area.focus();
+  area.select();
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } catch {
+    /* Offer manual selection. */
+  }
+  area.remove();
+  if (focused?.isConnected) focused.focus({ preventScroll: true });
+  if (copied) {
+    confirmCopy();
+    return;
+  }
+  dialog(
+    'Copy this text<span class="title-period">.</span>',
+    "READY TO TAKE WITH YOU",
+    '<p class="dialog-lede">Your browser could not copy automatically. The text is selected below: use Copy from its context menu, or press Ctrl+C (⌘C on Mac).</p><textarea id="copy-text" rows="5" readonly aria-label="Selected text to copy"></textarea>',
+  );
+  $("#copy-text").value = text;
+  $("#copy-text").focus();
+  $("#copy-text").select();
+}
+
 function dialog(title, eyebrow, body, wide = false) {
   $("#dialog-eyebrow").textContent = eyebrow;
   $("#dialog-content").innerHTML = `<h2 id="dialog-title">${title}</h2>${body}`;
@@ -384,16 +477,58 @@ function openInspector(tab = "source") {
 }
 
 function openDecoder() {
+  const groups = [...new Set(translationMethods.map((method) => method.group))];
+  const options = groups
+    .map(
+      (group) =>
+        `<optgroup label="${escapeHtml(group)}">${translationMethods
+          .filter((method) => method.group === group)
+          .map(
+            (method) =>
+              `<option value="${method.id}" ${method.id === "base64" ? "selected" : ""}>${escapeHtml(method.label)}</option>`,
+          )
+          .join("")}</optgroup>`,
+    )
+    .join("");
   dialog(
     'The decoder desk<span class="title-period">.</span>',
     "A LITTLE HELP WITH TRANSLATION",
     `
-    <p class="dialog-lede">Change the language. Keep the curiosity. This desk translates text; it never runs code.</p><form id="decoder-form"><label for="decode-method" class="eyebrow form-label">TRANSLATION</label><select id="decode-method"><option value="base64">Base64 → text</option><option value="binary">Binary ASCII → text</option><option value="hex">Hexadecimal ASCII → text</option><option value="ascii">Decimal ASCII → text</option><option value="alphabet">Alphabet positions (A = 1)</option><option value="rot13">ROT13</option><option value="caesar1">Caesar: move back 1</option><option value="caesar2">Caesar: move back 2</option><option value="url">URL percent-decoding</option><option value="reverse">Reverse text</option></select><label class="eyebrow form-label" for="decode-input">THE CODED TEXT</label><textarea id="decode-input" rows="4" maxlength="5000" placeholder="Paste or type a small mystery…" spellcheck="false"></textarea><button class="primary-button" type="submit">Translate ${icon("arrow")}</button><div class="decoder-result" aria-live="polite"><span class="eyebrow">THE OTHER SIDE</span><output id="decode-output">Your translation will appear here.</output><div class="decoder-result-actions"><button id="use-translation" class="secondary-button decoder-use-answer" type="button" aria-describedby="decode-use-hint" disabled>Use as answer ${icon("arrow")}</button><span id="decode-use-hint">Translate some text to use it as your answer.</span></div></div></form>
+    <p class="dialog-lede">Change the language. Keep the curiosity. This desk translates text; it never runs code.</p>
+    <form id="decoder-form" novalidate>
+      <label for="decode-method" class="eyebrow form-label">TRANSLATION</label>
+      <select id="decode-method" aria-describedby="decode-method-help">${options}</select>
+      <p id="decode-method-help" class="decoder-method-help"></p>
+      <div id="rotation-controls" class="decoder-settings" hidden>
+        <label for="decode-shift">Places (0–26)<input id="decode-shift" type="number" min="0" max="26" step="1" value="13" inputmode="numeric"></label>
+        <label for="decode-direction">Direction<select id="decode-direction"><option value="backward">Backward</option><option value="forward">Forward</option></select></label>
+      </div>
+      <div id="key-controls" class="decoder-settings" hidden><label for="decode-key">Vigenère key<input id="decode-key" type="text" maxlength="100" autocomplete="off" spellcheck="false" placeholder="For example: KEY"></label></div>
+      <label class="eyebrow form-label" for="decode-input">TEXT TO TRANSLATE</label>
+      <textarea id="decode-input" rows="4" maxlength="5000" placeholder="Paste or type a small mystery…" spellcheck="false"></textarea>
+      <button class="primary-button" type="submit">Translate ${icon("arrow")}</button>
+      <div class="decoder-result" aria-live="polite"><div class="decoder-result-heading"><span class="eyebrow">THE OTHER SIDE</span><button id="copy-translation" class="copy-button" type="button" data-copy-label="Copy result" disabled>${icon("copy")} <span class="copy-label" aria-live="polite">Copy result</span></button></div><output id="decode-output">Your translation will appear here.</output><div class="decoder-result-actions"><button id="use-translation" class="secondary-button decoder-use-answer" type="button" aria-describedby="decode-use-hint" disabled>Use as answer ${icon("arrow")}</button><span id="decode-use-hint">Translate some text to use it as your answer.</span></div></div>
+    </form>
   `,
   );
   let translatedText = "";
   const useButton = $("#use-translation");
   const useHint = $("#decode-use-hint");
+  const copyButton = $("#copy-translation");
+  function updateMethod() {
+    const method = translationMethods.find(
+      (method) => method.id === $("#decode-method").value,
+    );
+    $("#decode-method-help").textContent = method.help;
+    $("#decode-input").placeholder = method.placeholder;
+    $("#rotation-controls").hidden = method.controls !== "rotation";
+    $("#key-controls").hidden = method.controls !== "key";
+  }
+  $("#decode-method").addEventListener("change", updateMethod);
+  updateMethod();
+  copyButton.addEventListener("click", () =>
+    copyText(translatedText, "Translation copied.", copyButton),
+  );
   function updateUseButton() {
     const answer = $("#answer");
     useButton.disabled = true;
@@ -421,15 +556,25 @@ function openDecoder() {
   $("#decoder-form").addEventListener("submit", (event) => {
     event.preventDefault();
     translatedText = "";
+    copyButton.disabled = true;
     try {
       const result = decodeText(
         $("#decode-input").value,
         $("#decode-method").value,
+        {
+          shift:
+            $("#decode-shift").value === ""
+              ? NaN
+              : Number($("#decode-shift").value),
+          direction: $("#decode-direction").value,
+          key: $("#decode-key").value,
+        },
       );
       $("#decode-output").textContent =
         result || "Add some text to translate first.";
       $("#decode-output").classList.remove("decode-error");
       translatedText = result;
+      copyButton.disabled = !result.trim();
     } catch (error) {
       $("#decode-output").textContent =
         error.message === "The string to be decoded is not correctly encoded."

@@ -46,7 +46,8 @@ The regular development server runs inside the cloud workspace. Its `localhost:3
 - Three progressive hints for every entry; the third explicitly reveals its answer.
 - Per-entry notes, completed answers, and progress persist in this browser's local storage. The site warns when storage is unavailable. Clearing browser data clears the save; there is no cross-device sync.
 - The built-in inspector exposes the current clue's real markup, accessible image descriptions, styles, tab title, and address. No browser developer tools are required on mobile.
-- A local decoder handles Base64, binary/hex/decimal ASCII, alphabet positions, ROT13, two Caesar shifts, percent encoding, and reversal. It never evaluates submitted JavaScript.
+- The decoder desk provides 32 translations: Morse in both directions; adjustable alphabet rotation and ROT13; Atbash; keyed Vigenère; five-bit/Bacon; Polybius; two-rail fence; NATO phonetics; binary, hexadecimal, decimal, and octal bytes; alphabet positions; Roman numerals; Base64; URL encoding; common HTML entities; and reversal. Common encodings work in both directions and support UTF-8 text. The translator never evaluates submitted JavaScript.
+- **Copy clue** copies the displayed puzzle text, including spaced number sequences and code snippets. Translation results have **Copy result** and **Use as answer** buttons. Copying falls back to selected text when browser clipboard access is unavailable.
 - Revisit unlocked entries through the index. Resetting progress requires a separate explicit confirmation.
 - All fonts and clues are served locally. There are no analytics, accounts, or external service requirements.
 
@@ -55,6 +56,7 @@ The regular development server runs inside the cloud workspace. Its `localhost:3
 - `src/puzzles.js`: original clues, answers, hints, explanations, and chapter metadata.
 - `src/engine.js`: validation, normalization, sequential unlocking, URL clues, and resilient save loading.
 - `src/decoder.js`: bounded text translation tools.
+- `src/translation-methods.js`: grouped translator labels, examples, and input guidance.
 - `src/main.js`: accessible game interface, notebook, index, dialogs, and persistence.
 - `src/style.css`: responsive visual design and reduced-motion support.
 - `scripts/export-standalone.mjs`: packages the built site, fonts, illustration, and font licenses into one downloadable HTML file.
