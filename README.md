@@ -50,6 +50,7 @@ The regular development server runs inside the cloud workspace. Its `localhost:3
 - **Copy text** copies the displayed puzzle text, including spaced number sequences and code snippets. Translation results have **Copy result** and **Use as answer** buttons. Copying falls back to selected text when browser clipboard access is unavailable.
 - Search the translators by name or category. Matching ignores capitalization and accents, so typing `vigenere` finds Vigenère. Clearing the search restores the complete list.
 - Revisit unlocked entries through the index. Resetting progress requires a separate explicit confirmation.
+- Right-click a chapter in the contents or index tabs for a quick list of its unlocked questions. The chapter-name dropdown above each question opens the same menu on touch screens. Arrow keys, Home/End, Shift+F10, Escape, and outside clicks work with the menu; locked questions remain locked.
 - Every entry has a **Redo question** button. It clears the answer, revealed hints, and interactive state for a fresh attempt while preserving field notes, solved entries, and unlocked chapters. Replaying a completed entry hides its solution and saves the retry across reloads; solving it again does not increase the completed count or change the original attempt statistics.
 - All fonts and clues are served locally. There are no analytics, accounts, or external service requirements.
 
@@ -60,6 +61,7 @@ The regular development server runs inside the cloud workspace. Its `localhost:3
 - `src/decoder.js`: bounded text translation tools.
 - `src/translation-methods.js`: grouped translator labels, examples, and input guidance.
 - `src/main.js`: accessible game interface, notebook, index, dialogs, and persistence.
+- `src/chapter-menu.js`: chapter context menus and keyboard/touch navigation.
 - `src/style.css`: responsive visual design and reduced-motion support.
 - `scripts/export-standalone.mjs`: packages the built site, fonts, illustration, and font licenses into one downloadable HTML file.
 

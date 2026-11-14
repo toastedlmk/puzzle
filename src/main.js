@@ -18,6 +18,7 @@ import {
 } from "./engine.js";
 import { decodeText } from "./decoder.js";
 import { translationMethods } from "./translation-methods.js";
+import { createChapterMenu } from "./chapter-menu.js";
 
 const icons = {
   arrow: '<path d="M4 12h16m-6-6 6 6-6 6"/>',
@@ -35,6 +36,7 @@ const icons = {
   restart: '<path d="M4 10a8 8 0 1 1 1 8M4 4v6h6"/>',
   pen: '<path d="m14 5 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14v6Z"/>',
   copy: '<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
+  chevron: '<path d="m6 9 6 6 6-6"/>',
 };
 const icon = (name, cls = "") =>
   `<svg class="icon ${cls}" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${icons[name] || icons.arrow}</svg>`;
@@ -96,6 +98,15 @@ $("#app").innerHTML = `
   <div id="toast" class="toast" role="status"></div>
 `;
 
+const chapterMenu = createChapterMenu({
+  chapters,
+  puzzles,
+  getState: () => state,
+  onVisit: visit,
+  onIndex: openIndex,
+  icon,
+});
+
 function save() {
   try {
     storage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -112,6 +123,7 @@ function save() {
 }
 
 function renderNavigation() {
+  chapterMenu.close();
   const completed = solvedCount(state);
   $(".header-progress").textContent = `${completed} / 100`;
   $("#chapter-list").innerHTML = chapters
@@ -121,7 +133,7 @@ function renderNavigation() {
         .filter((p) => state.solved[p.id]).length;
       const active = Math.floor(state.current / 20) === i;
       const locked = i * 20 > unlockedIndex(state);
-      return `<button class="chapter-button ${active ? "active" : ""} ${locked ? "locked" : ""}" data-chapter="${i}" aria-label="Chapter ${i + 1}: ${chapter.title}${locked ? ", locked" : ""}" ${active ? 'aria-current="step"' : ""}><span class="chapter-numeral">${chapter.numeral}.</span><span class="chapter-copy"><strong>${chapter.title}</strong><span>Entries ${number(i * 20 + 1)}—${number((i + 1) * 20)}</span></span>${locked ? icon("lock") : done === 20 ? icon("check") : '<span class="chapter-dot"></span>'}</button>`;
+      return `<button class="chapter-button ${active ? "active" : ""} ${locked ? "locked" : ""}" data-chapter="${i}" title="Right-click for questions you can revisit" aria-label="Chapter ${i + 1}: ${chapter.title}${locked ? ", locked" : ""}" ${active ? 'aria-current="step"' : ""}><span class="chapter-numeral">${chapter.numeral}.</span><span class="chapter-copy"><strong>${chapter.title}</strong><span>Entries ${number(i * 20 + 1)}—${number((i + 1) * 20)}</span></span>${locked ? icon("lock") : done === 20 ? icon("check") : '<span class="chapter-dot"></span>'}</button>`;
     })
     .join("");
   $("#journey-progress").innerHTML =
@@ -182,7 +194,7 @@ function renderPuzzle(focus = false) {
     : puzzle.prompt;
   $("#puzzle-card").innerHTML = `
     <div class="card-topline"><span class="entry-label"><span class="status-dot ${solved ? "solved" : ""}"></span> ENTRY ${number(puzzle.id + 1)}${redoing ? '<span class="redo-badge">REDO</span>' : ""}</span><span class="category-label">${escapeHtml(chapter.category)} <span>↗</span></span></div>
-    <div class="card-body"><div class="entry-overline">CHAPTER ${chapter.numeral} <span>·</span> ${escapeHtml(chapter.title)}</div><h2 id="puzzle-title" tabindex="-1">${escapeHtml(puzzle.title)}<span class="title-period">.</span></h2><p class="puzzle-prompt">${escapeHtml(prompt)}</p>
+    <div class="card-body"><div class="entry-overline">CHAPTER ${chapter.numeral} <span>·</span> <button class="chapter-quick-menu" type="button" data-chapter-menu="${puzzle.chapter}" aria-haspopup="menu" aria-expanded="false" aria-label="Questions in ${escapeHtml(chapter.title)}">${escapeHtml(chapter.title)} ${icon("chevron")}</button></div><h2 id="puzzle-title" tabindex="-1">${escapeHtml(puzzle.title)}<span class="title-period">.</span></h2><p class="puzzle-prompt">${escapeHtml(prompt)}</p>
     <div class="clue-toolbar"><button id="redo-question" class="copy-button" type="button" title="Start a fresh attempt. Your overall progress and field notes are kept.">${icon("restart")} Redo question</button><button id="copy-clue" class="copy-button" type="button" data-copy-label="Copy text">${icon("copy")} <span class="copy-label" aria-live="polite">Copy text</span></button></div>
     <div id="clue-panel" class="clue-panel clue-${puzzle.type}">${renderArt(puzzle)}</div>
     ${
@@ -311,6 +323,7 @@ function visit(index) {
     showToast("One door at a time. Solve your current entry to go further.");
     return;
   }
+  chapterMenu.close();
   state.current = index;
   save();
   if ($("#app-dialog").open) $("#app-dialog").close();
@@ -415,6 +428,7 @@ async function copyText(text, message, button) {
 }
 
 function dialog(title, eyebrow, body, wide = false) {
+  chapterMenu.close();
   $("#dialog-eyebrow").textContent = eyebrow;
   $("#dialog-content").innerHTML = `<h2 id="dialog-title">${title}</h2>${body}`;
   $("#app-dialog").classList.toggle("wide-dialog", wide);
