@@ -1579,6 +1579,7 @@ dialog.wide-dialog {
   color: #8d9a7c;
 }
 #decode-method,
+#translator-search,
 #decode-input,
 #share-text,
 #copy-text {
@@ -1593,6 +1594,20 @@ dialog.wide-dialog {
 }
 #decode-method {
   appearance: auto;
+}
+.translator-search-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+#translator-count {
+  color: #7c8b6d;
+  font-size: 10px;
+  white-space: nowrap;
+}
+#decoder-form > .primary-button:disabled {
+  opacity: 0.45;
 }
 #decode-input,
 #share-text,

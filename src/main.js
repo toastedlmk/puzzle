@@ -181,7 +181,7 @@ function renderPuzzle(focus = false) {
   $("#puzzle-card").innerHTML = `
     <div class="card-topline"><span class="entry-label"><span class="status-dot ${solved ? "solved" : ""}"></span> ENTRY ${number(puzzle.id + 1)}</span><span class="category-label">${escapeHtml(chapter.category)} <span>↗</span></span></div>
     <div class="card-body"><div class="entry-overline">CHAPTER ${chapter.numeral} <span>·</span> ${escapeHtml(chapter.title)}</div><h2 id="puzzle-title" tabindex="-1">${escapeHtml(puzzle.title)}<span class="title-period">.</span></h2><p class="puzzle-prompt">${escapeHtml(prompt)}</p>
-    <div class="clue-toolbar"><button id="copy-clue" class="copy-button" type="button" data-copy-label="Copy clue">${icon("copy")} <span class="copy-label" aria-live="polite">Copy clue</span></button></div>
+    <div class="clue-toolbar"><button id="copy-clue" class="copy-button" type="button" data-copy-label="Copy text">${icon("copy")} <span class="copy-label" aria-live="polite">Copy text</span></button></div>
     <div id="clue-panel" class="clue-panel clue-${puzzle.type}">${renderArt(puzzle)}</div>
     ${
       solved
@@ -204,10 +204,10 @@ function renderPuzzle(focus = false) {
   renderNavigation();
   $("#copy-clue").addEventListener("click", () => {
     const text = getClueText(puzzle);
-    if (text) copyText(text, "Clue copied.", $("#copy-clue"));
+    if (text) copyText(text, "Text copied.", $("#copy-clue"));
     else
       showToast(
-        "This clue is visual. Look at its page details in the inspector.",
+        "This puzzle uses an image. Open the inspector for its details.",
       );
   });
   if (!solved) {
@@ -477,27 +477,31 @@ function openInspector(tab = "source") {
 }
 
 function openDecoder() {
-  const groups = [...new Set(translationMethods.map((method) => method.group))];
-  const options = groups
-    .map(
-      (group) =>
-        `<optgroup label="${escapeHtml(group)}">${translationMethods
-          .filter((method) => method.group === group)
-          .map(
-            (method) =>
-              `<option value="${method.id}" ${method.id === "base64" ? "selected" : ""}>${escapeHtml(method.label)}</option>`,
-          )
-          .join("")}</optgroup>`,
-    )
-    .join("");
+  function methodOptions(methods, selected) {
+    const groups = [...new Set(methods.map((method) => method.group))];
+    return groups
+      .map(
+        (group) =>
+          `<optgroup label="${escapeHtml(group)}">${methods
+            .filter((method) => method.group === group)
+            .map(
+              (method) =>
+                `<option value="${method.id}" ${method.id === selected ? "selected" : ""}>${escapeHtml(method.label)}</option>`,
+            )
+            .join("")}</optgroup>`,
+      )
+      .join("");
+  }
   dialog(
     'The decoder desk<span class="title-period">.</span>',
     "A LITTLE HELP WITH TRANSLATION",
     `
     <p class="dialog-lede">Change the language. Keep the curiosity. This desk translates text; it never runs code.</p>
     <form id="decoder-form" novalidate>
+      <div class="translator-search-label"><label for="translator-search" class="eyebrow form-label">FIND A TRANSLATOR</label><span id="translator-count" role="status" aria-live="polite">32 translators</span></div>
+      <input id="translator-search" type="search" maxlength="100" autocomplete="off" spellcheck="false" placeholder="Search Morse, rotation, Base64…" aria-controls="decode-method" aria-describedby="translator-count">
       <label for="decode-method" class="eyebrow form-label">TRANSLATION</label>
-      <select id="decode-method" aria-describedby="decode-method-help">${options}</select>
+      <select id="decode-method" aria-describedby="decode-method-help">${methodOptions(translationMethods, "base64")}</select>
       <p id="decode-method-help" class="decoder-method-help"></p>
       <div id="rotation-controls" class="decoder-settings" hidden>
         <label for="decode-shift">Places (0–26)<input id="decode-shift" type="number" min="0" max="26" step="1" value="13" inputmode="numeric"></label>
@@ -515,15 +519,64 @@ function openDecoder() {
   const useButton = $("#use-translation");
   const useHint = $("#decode-use-hint");
   const copyButton = $("#copy-translation");
+  let activeMethodId;
+  let lastSelectedId = "base64";
   function updateMethod() {
     const method = translationMethods.find(
       (method) => method.id === $("#decode-method").value,
     );
-    $("#decode-method-help").textContent = method.help;
-    $("#decode-input").placeholder = method.placeholder;
-    $("#rotation-controls").hidden = method.controls !== "rotation";
-    $("#key-controls").hidden = method.controls !== "key";
+    if (activeMethodId !== method?.id) {
+      translatedText = "";
+      $("#decode-output").textContent = "Your translation will appear here.";
+      $("#decode-output").classList.remove("decode-error");
+      copyButton.disabled = true;
+      clearTimeout(copyButton.copyFeedbackTimer);
+      copyButton.querySelector(".copy-label").textContent =
+        copyButton.dataset.copyLabel;
+      updateUseButton();
+      activeMethodId = method?.id;
+    }
+    if (method) lastSelectedId = method.id;
+    $("#decode-method-help").textContent =
+      method?.help || "No matches. Try another name or clear the search.";
+    $("#decode-input").placeholder =
+      method?.placeholder || "Paste or type text to translate…";
+    $("#rotation-controls").hidden = method?.controls !== "rotation";
+    $("#key-controls").hidden = method?.controls !== "key";
+    $("#decoder-form > button[type=submit]").disabled = !method;
   }
+  const searchText = (value) =>
+    value
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+  $("#translator-search").addEventListener("input", (event) => {
+    const terms = searchText(event.target.value)
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    const matches = translationMethods.filter((method) => {
+      const text = searchText(`${method.label} ${method.id} ${method.group}`);
+      return terms.every((term) => text.includes(term));
+    });
+    const previous = $("#decode-method").value || lastSelectedId;
+    const selected = matches.some((method) => method.id === previous)
+      ? previous
+      : matches[0]?.id;
+    $("#decode-method").innerHTML = matches.length
+      ? methodOptions(matches, selected)
+      : '<option value="">No translators found</option>';
+    $("#decode-method").disabled = !matches.length;
+    $("#translator-count").textContent =
+      `${matches.length} ${matches.length === 1 ? "translator" : "translators"}`;
+    updateMethod();
+  });
+  $("#translator-search").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (!$("#decode-method").disabled) $("#decode-method").focus();
+    }
+  });
   $("#decode-method").addEventListener("change", updateMethod);
   updateMethod();
   copyButton.addEventListener("click", () =>
@@ -555,6 +608,7 @@ function openDecoder() {
   });
   $("#decoder-form").addEventListener("submit", (event) => {
     event.preventDefault();
+    if (!$("#decode-method").value) return;
     translatedText = "";
     copyButton.disabled = true;
     try {

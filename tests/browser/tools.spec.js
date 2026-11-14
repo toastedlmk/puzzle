@@ -38,11 +38,80 @@ async function fakeClipboard(page) {
   );
 }
 
+for (const width of [1440, 390]) {
+  test(`translator search filters, handles no matches, and restores the list at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    await page.locator('[data-action="decoder"]').click();
+    await page.locator("#decode-input").fill("... --- ...");
+    const search = page.getByRole("searchbox", { name: "FIND A TRANSLATOR" });
+    await search.fill("MoRsE");
+    await expect(page.locator("#translator-count")).toHaveText("2 translators");
+    await expect(page.locator("#decode-method option")).toHaveCount(2);
+    await expect(page.locator("#decode-method")).toHaveValue("morse");
+    await expect(page.locator("#decode-input")).toHaveValue("... --- ...");
+    await page.getByRole("button", { name: "Translate", exact: true }).click();
+    await expect(page.locator("#decode-output")).toHaveText("SOS");
+    await expect(page.locator("#copy-translation")).toBeEnabled();
+
+    await search.fill("vigenere");
+    await expect(page.locator("#decode-method option")).toHaveCount(2);
+    await expect(page.locator("#key-controls")).toBeVisible();
+    await expect(page.locator("#copy-translation")).toBeDisabled();
+    await expect(page.locator("#decode-output")).toHaveText(
+      "Your translation will appear here.",
+    );
+    await search.fill("no-such-translator-xyz");
+    await expect(page.locator("#translator-count")).toHaveText("0 translators");
+    await expect(page.locator("#decode-method")).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: "Translate", exact: true }),
+    ).toBeDisabled();
+    await expect(page.locator("#decode-method-help")).toContainText(
+      "No matches",
+    );
+    await search.press("Enter");
+    await expect(page.locator("#decode-output")).toHaveText(
+      "Your translation will appear here.",
+    );
+
+    await search.fill("");
+    await expect(page.locator("#decode-method option")).toHaveCount(32);
+    await expect(page.locator("#decode-method")).toHaveValue("vigenere");
+    await expect(
+      page.getByRole("button", { name: "Translate", exact: true }),
+    ).toBeEnabled();
+    await search.fill("rot13");
+    await expect(page.locator("#translator-count")).toHaveText("1 translator");
+    await page.locator("#decode-input").fill("FRPERG");
+    await search.press("Enter");
+    await expect(page.locator("#decode-method")).toBeFocused();
+    await expect(page.locator("#decode-output")).toHaveText(
+      "Your translation will appear here.",
+    );
+    await page.getByRole("button", { name: "Translate", exact: true }).click();
+    await expect(page.locator("#decode-output")).toHaveText("SECRET");
+    expect(
+      await page
+        .locator("#app-dialog")
+        .evaluate((el) => el.scrollWidth <= el.clientWidth),
+    ).toBe(true);
+  });
+}
+
 test("copy the decimal clue from entry 028, translate it, copy the result, and fill the answer", async ({
   page,
 }) => {
   await fakeClipboard(page);
   await startAt(page, 27);
+  await expect(
+    page.getByRole("button", { name: "Copy text", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Copy clue", exact: true }),
+  ).toHaveCount(0);
   await page.locator("#copy-clue").click();
   await expect
     .poll(() => page.evaluate(() => window.copiedText))
@@ -167,7 +236,7 @@ test("clipboard denial falls back to selected text without reporting a false cop
       .locator("#copy-text")
       .evaluate((el) => el.value.slice(el.selectionStart, el.selectionEnd)),
   ).toBe("83 72 69 76 70");
-  await expect(page.locator("#toast")).not.toHaveText("Clue copied.");
+  await expect(page.locator("#toast")).not.toHaveText("Text copied.");
 });
 
 test("copy controls and expanded translator settings fit small screens", async ({

@@ -47,7 +47,8 @@ The regular development server runs inside the cloud workspace. Its `localhost:3
 - Per-entry notes, completed answers, and progress persist in this browser's local storage. The site warns when storage is unavailable. Clearing browser data clears the save; there is no cross-device sync.
 - The built-in inspector exposes the current clue's real markup, accessible image descriptions, styles, tab title, and address. No browser developer tools are required on mobile.
 - The decoder desk provides 32 translations: Morse in both directions; adjustable alphabet rotation and ROT13; Atbash; keyed Vigenère; five-bit/Bacon; Polybius; two-rail fence; NATO phonetics; binary, hexadecimal, decimal, and octal bytes; alphabet positions; Roman numerals; Base64; URL encoding; common HTML entities; and reversal. Common encodings work in both directions and support UTF-8 text. The translator never evaluates submitted JavaScript.
-- **Copy clue** copies the displayed puzzle text, including spaced number sequences and code snippets. Translation results have **Copy result** and **Use as answer** buttons. Copying falls back to selected text when browser clipboard access is unavailable.
+- **Copy text** copies the displayed puzzle text, including spaced number sequences and code snippets. Translation results have **Copy result** and **Use as answer** buttons. Copying falls back to selected text when browser clipboard access is unavailable.
+- Search the translators by name or category. Matching ignores capitalization and accents, so typing `vigenere` finds Vigenère. Clearing the search restores the complete list.
 - Revisit unlocked entries through the index. Resetting progress requires a separate explicit confirmation.
 - All fonts and clues are served locally. There are no analytics, accounts, or external service requirements.
 
