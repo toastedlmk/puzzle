@@ -1,3 +1,5 @@
+import { inspectionChapters, inspectionPuzzles } from "./inspection-puzzles.js";
+
 export const chapters = [
   {
     title: "First impressions",
@@ -29,6 +31,7 @@ export const chapters = [
     numeral: "V",
     category: "Connections",
   },
+  ...inspectionChapters,
 ];
 
 function p(
@@ -1099,4 +1102,10 @@ export const puzzles = [
     "Return to entry 001: the first word of its question.",
     "Your first answer was WHAT. A question brought you in, and curiosity carried you all the way through.",
   ),
-].map((puzzle, id) => ({ ...puzzle, id, chapter: Math.floor(id / 20) }));
+  ...inspectionPuzzles,
+].map((puzzle, id) => ({
+  ...puzzle,
+  id,
+  chapter: Math.floor(id / 20),
+  part: Math.floor(id / 100),
+}));

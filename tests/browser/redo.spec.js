@@ -19,7 +19,7 @@ for (const width of [1440, 320]) {
     await expect(page.locator("#answer-feedback")).toBeEmpty();
     await expect(page.locator(".hint-note")).toHaveCount(0);
     await expect(page.locator("#field-note")).toHaveValue("Keep my note.");
-    await expect(page.locator(".header-progress")).toHaveText("0 / 100");
+    await expect(page.locator(".header-progress")).toHaveText("0 / 200");
     await page.locator("#answer").fill("what");
     await page.locator("#answer").press("Enter");
     await page.locator("#next-entry").click();
@@ -34,7 +34,7 @@ for (const width of [1440, 320]) {
     await expect(page.locator("#answer")).toBeVisible();
     await expect(page.locator(".solved-panel")).toHaveCount(0);
     await expect(page.locator(".redo-badge")).toHaveText("REDO");
-    await expect(page.locator(".header-progress")).toHaveText("2 / 100");
+    await expect(page.locator(".header-progress")).toHaveText("2 / 200");
     await expect(page.locator(".hint-note")).toHaveCount(0);
     await page.locator("#hint-button").click();
     await page.reload();
@@ -42,7 +42,7 @@ for (const width of [1440, 320]) {
     await expect(page.locator(".redo-badge")).toBeVisible();
     await expect(page.locator(".hint-note")).toHaveCount(1);
     await expect(page.locator("#field-note")).toHaveValue("Keep my note.");
-    await expect(page.locator(".header-progress")).toHaveText("2 / 100");
+    await expect(page.locator(".header-progress")).toHaveText("2 / 200");
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -59,7 +59,7 @@ for (const width of [1440, 320]) {
     await page.locator("#answer").press("Enter");
     await expect(page.locator(".solved-panel")).toBeVisible();
     await expect(page.locator(".redo-badge")).toHaveCount(0);
-    await expect(page.locator(".header-progress")).toHaveText("2 / 100");
+    await expect(page.locator(".header-progress")).toHaveText("2 / 200");
     await page.locator("#next-entry").click();
     await expect(page.locator("#puzzle-title")).toHaveText("Quiet beginnings.");
     await expect(page.locator(".solved-panel")).toBeVisible();
@@ -69,7 +69,7 @@ for (const width of [1440, 320]) {
   });
 }
 
-test("the final question can be redone without losing the completed journey", async ({
+test("the first chapter completion can be redone without losing its progress", async ({
   page,
 }) => {
   await page.goto("/");
@@ -97,11 +97,11 @@ test("the final question can be redone without losing the completed journey", as
     .click();
   await expect(page.locator(".final-panel")).toHaveCount(0);
   await expect(page.locator("#answer")).toBeVisible();
-  await expect(page.locator(".header-progress")).toHaveText("100 / 100");
+  await expect(page.locator(".header-progress")).toHaveText("100 / 200");
   await page.locator("#answer").fill("what");
   await page.locator("#answer").press("Enter");
   await expect(page.locator(".final-panel")).toBeVisible();
-  await expect(page.locator(".header-progress")).toHaveText("100 / 100");
+  await expect(page.locator(".header-progress")).toHaveText("100 / 200");
   await page.reload();
   await expect(page.locator(".final-panel")).toBeVisible();
 });

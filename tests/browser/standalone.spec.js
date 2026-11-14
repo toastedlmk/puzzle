@@ -14,7 +14,7 @@ test.beforeAll(async () => {
   html = await readFile("dist/the-afterword.html", "utf8");
 });
 
-test("standalone edition completes all 100 entries with every network request blocked", async ({
+test("standalone edition completes all 200 entries with every network request blocked", async ({
   page,
 }) => {
   const requests = [];
@@ -57,10 +57,12 @@ test("standalone edition completes all 100 entries with every network request bl
     await page.locator("#answer").fill(puzzle.answers[0]);
     await page.locator("#answer").press("Enter");
     await expect(page.locator(".solved-panel")).toBeVisible();
-    if (puzzle.id < 99) await page.locator("#next-entry").click();
+    if (puzzle.id === 99) await page.locator("#begin-chapter-two").click();
+    else if (puzzle.id < puzzles.length - 1)
+      await page.locator("#next-entry").click();
   }
   await expect(page.locator(".final-panel")).toBeVisible();
-  await expect(page.locator(".header-progress")).toHaveText("100 / 100");
+  await expect(page.locator(".header-progress")).toHaveText("200 / 200");
   expect(requests).toEqual([]);
   expect(errors).toEqual([]);
 });
@@ -82,7 +84,7 @@ test("standalone edition preserves notes and progress when browser storage is al
   await page.locator("#answer").fill("what");
   await page.locator("#answer").press("Enter");
   await page.reload();
-  await expect(page.locator(".header-progress")).toHaveText("1 / 100");
+  await expect(page.locator(".header-progress")).toHaveText("1 / 200");
   await expect(page.locator("#field-note")).toHaveValue(
     "This edition needs no server.",
   );

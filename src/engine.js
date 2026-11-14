@@ -1,3 +1,5 @@
+import { ENTRY_COUNT } from "./game-config.js";
+
 export const STORAGE_KEY = "afterword-progress-v1";
 
 export function normalizeAnswer(value) {
@@ -81,10 +83,10 @@ export function restoreState(storage, count) {
 export function solvedCount(state) {
   return Object.keys(state.solved).length;
 }
-export function unlockedIndex(state, count = 100) {
+export function unlockedIndex(state, count = ENTRY_COUNT) {
   return Math.min(solvedCount(state), count - 1);
 }
-export function canVisit(state, index, count = 100) {
+export function canVisit(state, index, count = ENTRY_COUNT) {
   return (
     Number.isInteger(index) &&
     index >= 0 &&
@@ -109,7 +111,7 @@ export function submitAnswer(state, puzzle, value) {
   return { status: "correct" };
 }
 
-export function redoQuestion(state, index, count = 100) {
+export function redoQuestion(state, index, count = ENTRY_COUNT) {
   if (!canVisit(state, index, count)) return false;
   if (state.solved[index]) {
     state.redos ||= {};

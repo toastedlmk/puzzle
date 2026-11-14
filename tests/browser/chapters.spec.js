@@ -37,7 +37,7 @@ test("right-clicking chapters lists available questions and revisits without cha
   await expect(page.getByRole("menu")).not.toBeVisible();
   await expect(page.locator("#puzzle-title")).toHaveText("A small beginning.");
   await expect(page.locator("#field-note")).toHaveValue("Keep this note.");
-  await expect(page.locator(".header-progress")).toHaveText("25 / 100");
+  await expect(page.locator(".header-progress")).toHaveText("25 / 200");
   await page.locator('[data-chapter="1"]').click({ button: "right" });
   await expect(page.locator("[data-menu-visit]")).toHaveCount(6);
   await expect(page.locator('[data-menu-visit="25"]')).toBeVisible();
@@ -65,7 +65,7 @@ test("locked chapters show an empty state and keep their questions locked in the
     "true",
   );
   await expect(page.locator(".index-entry:disabled")).toHaveCount(20);
-  await expect(page.locator(".header-progress")).toHaveText("25 / 100");
+  await expect(page.locator(".header-progress")).toHaveText("25 / 200");
 });
 
 test("chapter menus support keyboard navigation, dismissal, and viewport clamping", async ({
@@ -131,7 +131,7 @@ test("right-click menus inside the index work above the modal and Escape only cl
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await expect(page.getByRole("menu")).not.toBeVisible();
   await expect(page).toHaveURL(/entry=21/);
-  await expect(page.locator(".header-progress")).toHaveText("25 / 100");
+  await expect(page.locator(".header-progress")).toHaveText("25 / 200");
 });
 
 test.describe("touch chapter menus", () => {
@@ -152,7 +152,7 @@ test.describe("touch chapter menus", () => {
       expect(bounds.y + bounds.height).toBeLessThanOrEqual(836);
       await page.locator('[data-menu-visit="20"]').tap();
       await expect(page).toHaveURL(/entry=21/);
-      await expect(page.locator(".header-progress")).toHaveText("25 / 100");
+      await expect(page.locator(".header-progress")).toHaveText("25 / 200");
     });
   }
 });

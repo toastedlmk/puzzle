@@ -1,6 +1,6 @@
 # The Afterword
 
-An original, self-contained browser riddle in 100 entries, inspired by the observation, source inspection, and decoding puzzles in the supplied video. The puzzles and visual identity are original, rather than a copy of the referenced game.
+An original, self-contained browser riddle in 200 entries across two chapters, inspired by the observation, source inspection, and decoding puzzles in the supplied video. The puzzles and visual identity are original, rather than a copy of the referenced game.
 
 ## Run locally
 
@@ -17,7 +17,7 @@ The development server listens on port 3000. In the managed cloud workspace, use
 npm run build       # Production files in dist/
 npm run preview     # Serve the production build on port 3000
 npm test            # Engine, decoding, and puzzle-integrity checks
-npm run test:e2e    # Browser flows, complete 100-entry run, and responsive checks
+npm run test:e2e    # Browser flows, complete 200-entry run, and responsive checks
 ```
 
 Browser checks use the installed `/usr/bin/chromium` when available. Else run `npx playwright install chromium`, or set `CHROMIUM_PATH` to your browser executable. The test runner starts the development server automatically when needed.
@@ -42,10 +42,10 @@ The regular development server runs inside the cloud workspace. Its `localhost:3
 
 ## The game
 
-- Five chapters of twenty sequential entries: observation, decoding, page inspection, logic and code, then layered connections.
+- Two chapters of 100 entries, each split into five sections. Chapter 1 preserves the original 100 questions. Chapter 2 adds questions 101–200 with evidence hidden across the document, styles, metadata, templates, and layout. Its start button appears directly below Copy your result after question 100.
 - Three progressive hints for every entry; the third explicitly reveals its answer.
 - Per-entry notes, completed answers, and progress persist in this browser's local storage. The site warns when storage is unavailable. Clearing browser data clears the save; there is no cross-device sync.
-- The built-in inspector exposes the current clue's real markup, accessible image descriptions, styles, tab title, and address. No browser developer tools are required on mobile.
+- The full-page inspector includes searchable HTML source, an element browser, attributes, computed styles, pseudo-elements, dimensions, and a clickable read-only page-layout preview. It includes head, header, sidebars, content, and footer. Private field notes and application JavaScript are omitted from code views. No browser developer tools are required on mobile.
 - The decoder desk provides 32 translations: Morse in both directions; adjustable alphabet rotation and ROT13; Atbash; keyed Vigenère; five-bit/Bacon; Polybius; two-rail fence; NATO phonetics; binary, hexadecimal, decimal, and octal bytes; alphabet positions; Roman numerals; Base64; URL encoding; common HTML entities; and reversal. Common encodings work in both directions and support UTF-8 text. The translator never evaluates submitted JavaScript.
 - **Copy text** copies the displayed puzzle text, including spaced number sequences and code snippets. Translation results have **Copy result** and **Use as answer** buttons. Copying falls back to selected text when browser clipboard access is unavailable.
 - Search the translators by name or category. Matching ignores capitalization and accents, so typing `vigenere` finds Vigenère. Clearing the search restores the complete list.
@@ -56,7 +56,11 @@ The regular development server runs inside the cloud workspace. Its `localhost:3
 
 ## Structure
 
-- `src/puzzles.js`: original clues, answers, hints, explanations, and chapter metadata.
+- `src/puzzles.js`: original questions and the complete 200-entry catalogue.
+- `src/inspection-puzzles.js`: the 100 inspection-focused questions and their actual page evidence.
+- `src/inspection-scenes.js`: mounts and cleans up each question's document attributes, hidden elements, comments, and styles.
+- `src/inspector.js`: full-document snapshots, DOM browsing, styles, and the script-free layout preview.
+- `src/game-config.js`: chapter ranges and total entry count.
 - `src/engine.js`: validation, normalization, sequential unlocking, URL clues, and resilient save loading.
 - `src/decoder.js`: bounded text translation tools.
 - `src/translation-methods.js`: grouped translator labels, examples, and input guidance.

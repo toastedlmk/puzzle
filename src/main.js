@@ -19,6 +19,9 @@ import {
 import { decodeText } from "./decoder.js";
 import { translationMethods } from "./translation-methods.js";
 import { createChapterMenu } from "./chapter-menu.js";
+import { PARTS } from "./game-config.js";
+import { applyInspectionScene } from "./inspection-scenes.js";
+import { capturePage, renderInspector } from "./inspector.js";
 
 const icons = {
   arrow: '<path d="M4 12h16m-6-6 6 6-6 6"/>',
@@ -55,6 +58,8 @@ const $ = (selector) => document.querySelector(selector);
 const number = (n) => String(n).padStart(3, "0");
 const embedded = globalThis.__AFTERWORD_EMBEDDED__;
 let entryAddress;
+let inspectionSnapshot;
+let disposeInspector = () => {};
 let storage;
 try {
   storage = window.localStorage;
@@ -77,14 +82,14 @@ $("#app").innerHTML = `
   <a class="skip-link" href="#puzzle-title">Skip to the riddle</a>
   <header class="site-header"><div class="header-inner">
     <a class="wordmark" href="${embedded ? "" : import.meta.env.BASE_URL}" aria-label="The Afterword home"><span class="brand-mark">${mark}</span> the afterword<span class="brand-period">.</span></a>
-    <span class="header-caption">A BROWSER RIDDLE IN 100 ENTRIES</span>
-    <nav class="header-nav" aria-label="Main navigation"><button class="rules-link" data-action="help">The rules ${icon("smallArrow")}</button><button class="progress-button" data-action="index">${icon("book")}<span>Your index</span><span class="header-progress">0 / 100</span></button></nav>
+    <span class="header-caption">TWO CHAPTERS · 200 ENTRIES</span>
+    <nav class="header-nav" aria-label="Main navigation"><button class="rules-link" data-action="help">The rules ${icon("smallArrow")}</button><button class="progress-button" data-action="index">${icon("book")}<span>Your index</span><span class="header-progress">0 / ${puzzles.length}</span></button></nav>
   </div></header>
   ${embedded ? '<div class="offline-address"><span>ENTRY ADDRESS</span><output id="entry-address" aria-label="Address clue for this entry"></output><span class="offline-edition">OFFLINE EDITION</span></div>' : ""}
   <main class="page-shell">
-    <section class="intro" aria-labelledby="intro-title"><div><p class="eyebrow"><span class="little-star">${mark}</span> A SMALL EXERCISE IN CURIOSITY</p><h1 id="intro-title">Look a little <em>closer.</em></h1></div><div class="intro-aside"><p>One hundred entries. A trail of hidden clues.<br>All you need is a different way of looking.</p><svg class="handdrawn-arrow" viewBox="0 0 70 65" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10C36-1 58 14 51 52M39 39l12 14 14-13"/><path d="M8 13C31 5 51 12 52 34" opacity=".35"/></svg></div></section>
+    <section class="intro" aria-labelledby="intro-title"><div><p class="eyebrow"><span class="little-star">${mark}</span> A SMALL EXERCISE IN CURIOSITY</p><h1 id="intro-title">Look a little <em>closer.</em></h1></div><div class="intro-aside"><p>Two hundred entries. A trail of hidden clues.<br>All you need is a different way of looking.</p><svg class="handdrawn-arrow" viewBox="0 0 70 65" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10C36-1 58 14 51 52M39 39l12 14 14-13"/><path d="M8 13C31 5 51 12 52 34" opacity=".35"/></svg></div></section>
     <div class="game-layout">
-      <aside class="chapter-sidebar" aria-label="Chapters"><div class="sidebar-label">THE CONTENTS <span>01—100</span></div><nav id="chapter-list" aria-label="Chapter navigation"></nav><div id="journey-progress"></div></aside>
+      <aside class="chapter-sidebar" aria-label="Chapters"><div class="sidebar-label">THE CONTENTS <span>001—200</span></div><nav id="part-list" aria-label="Story chapters"></nav><nav id="chapter-list" aria-label="Sections"></nav><div id="journey-progress"></div></aside>
       <section id="puzzle-card" class="puzzle-card" aria-label="Current riddle"></section>
       <aside class="field-sidebar" aria-label="Notes and tools">
         <section class="notebook"><div class="notebook-header"><h2>Field notes</h2>${icon("pen")}</div><p class="notebook-description">A thought worth keeping?</p><label class="sr-only" for="field-note">Your private notes for this entry</label><textarea id="field-note" maxlength="5000" placeholder="Follow a thought.\nLeave yourself a clue…" spellcheck="false"></textarea><div class="notebook-footer"><span class="note-entry">ENTRY 001</span><span id="note-status">Saved locally</span></div></section>
@@ -125,19 +130,41 @@ function save() {
 function renderNavigation() {
   chapterMenu.close();
   const completed = solvedCount(state);
-  $(".header-progress").textContent = `${completed} / 100`;
+  const part = PARTS[puzzles[state.current].part];
+  const offset = part.start / 20;
+  $(".header-progress").textContent = `${completed} / ${puzzles.length}`;
+  $("#part-list").innerHTML = PARTS.map(
+    (item, i) =>
+      `<button type="button" class="part-button ${item === part ? "active" : ""}" data-part="${i}" ${!canVisit(state, item.start, puzzles.length) ? "disabled" : ""}><span>${item.name}</span><small>${number(item.start + 1)}—${number(item.start + item.count)}</small>${!canVisit(state, item.start, puzzles.length) ? icon("lock") : ""}</button>`,
+  ).join("");
   $("#chapter-list").innerHTML = chapters
-    .map((chapter, i) => {
+    .slice(offset, offset + 5)
+    .map((chapter, local) => {
+      const i = offset + local;
       const done = puzzles
         .slice(i * 20, (i + 1) * 20)
         .filter((p) => state.solved[p.id]).length;
       const active = Math.floor(state.current / 20) === i;
-      const locked = i * 20 > unlockedIndex(state);
-      return `<button class="chapter-button ${active ? "active" : ""} ${locked ? "locked" : ""}" data-chapter="${i}" title="Right-click for questions you can revisit" aria-label="Chapter ${i + 1}: ${chapter.title}${locked ? ", locked" : ""}" ${active ? 'aria-current="step"' : ""}><span class="chapter-numeral">${chapter.numeral}.</span><span class="chapter-copy"><strong>${chapter.title}</strong><span>Entries ${number(i * 20 + 1)}—${number((i + 1) * 20)}</span></span>${locked ? icon("lock") : done === 20 ? icon("check") : '<span class="chapter-dot"></span>'}</button>`;
+      const locked = !canVisit(state, i * 20, puzzles.length);
+      return `<button class="chapter-button ${active ? "active" : ""} ${locked ? "locked" : ""}" data-chapter="${i}" title="Right-click for questions you can revisit" aria-label="Section ${chapter.numeral}: ${chapter.title}${locked ? ", locked" : ""}" ${active ? 'aria-current="step"' : ""}><span class="chapter-numeral">${chapter.numeral}.</span><span class="chapter-copy"><strong>${escapeHtml(chapter.title)}</strong><span>Entries ${number(i * 20 + 1)}—${number((i + 1) * 20)}</span></span>${locked ? icon("lock") : done === 20 ? icon("check") : '<span class="chapter-dot"></span>'}</button>`;
     })
     .join("");
+  const percent = Math.round((completed / puzzles.length) * 100);
   $("#journey-progress").innerHTML =
-    `<div class="journey-label"><span>YOUR JOURNEY</span><span>${completed}%</span></div><div class="journey-track" role="progressbar" aria-label="Entries solved" aria-valuenow="${completed}" aria-valuemin="0" aria-valuemax="100"><span style="width:${completed}%"></span></div><p><strong>${completed}</strong> of 100 doors opened.</p><span class="journey-footnote">A little further, one entry at a time.</span>`;
+    `<div class="journey-label"><span>YOUR JOURNEY</span><span>${percent}%</span></div><div class="journey-track" role="progressbar" aria-label="Entries solved" aria-valuenow="${completed}" aria-valuemin="0" aria-valuemax="${puzzles.length}"><span style="width:${percent}%"></span></div><p><strong>${completed}</strong> of ${puzzles.length} doors opened.</p><span class="journey-footnote">A little further, one entry at a time.</span>`;
+}
+
+function solvedMarkup(puzzle) {
+  const part = PARTS[puzzle.part];
+  const partDone = puzzle.id === part.start + part.count - 1;
+  const final = partDone && puzzle.part === PARTS.length - 1;
+  const hints = Object.entries(state.hints)
+    .filter(
+      ([id]) =>
+        Number(id) >= part.start && Number(id) < part.start + part.count,
+    )
+    .reduce((total, [, count]) => total + count, 0);
+  return `<section class="solved-panel ${partDone ? "final-panel" : ""}" ${partDone ? `data-part-complete="${puzzle.part + 1}"` : ""} aria-label="Entry solved"><div class="solved-heading"><span class="solved-check">${icon("check")}</span><div><span class="eyebrow">${partDone ? `${part.name.toUpperCase()} COMPLETE` : "THE DOOR IS OPEN"}</span><h3>${partDone ? (final ? "You saw beyond the surface." : "You followed the thread.") : puzzle.id % 20 === 19 ? "A section, complete." : "A little closer."}</h3></div>${partDone ? rosette : ""}</div><p>${escapeHtml(puzzle.explanation)}</p><div class="solution-word">THE ANSWER <strong>${escapeHtml(puzzle.answers[0])}</strong></div>${partDone ? `<p class="final-note">${part.count} discoveries in ${part.name}. ${hints} hints along the way.${final ? " All two hundred doors are open." : ""}</p><button class="primary-button" data-action="index">Revisit the journey ${icon("book")}</button><button class="text-button share-button" data-action="share">Copy your result ${icon("smallArrow")}</button>${!final ? `<button type="button" class="primary-button chapter-two-button" id="begin-chapter-two">Chapter 2 · Behind the page ${icon("arrow")}</button>` : ""}` : `<button class="primary-button next-button" id="next-entry">${puzzle.id % 20 === 19 ? "Begin the next section" : "The next entry"} ${icon("arrow")}</button>`}</section>`;
 }
 
 function renderArt(puzzle) {
@@ -174,8 +201,8 @@ function renderPuzzle(focus = false) {
   const chapter = chapters[puzzle.chapter];
   const redoing = !!state.redos[puzzle.id];
   const solved = !!state.solved[puzzle.id] && !redoing;
-  const finished =
-    solvedCount(state) === puzzles.length && puzzle.id === puzzles.length - 1;
+  const part = PARTS[puzzle.part];
+  const partDone = puzzle.id === part.start + part.count - 1;
   document.title = `${puzzle.tabClue ? `${puzzle.tabClue} | ` : ""}The Afterword — Entry ${number(puzzle.id + 1)}`;
   // Standalone files cannot reliably rewrite file:// query strings. An explicit
   // entry address preserves URL-based clues without navigation or a server.
@@ -194,14 +221,12 @@ function renderPuzzle(focus = false) {
     : puzzle.prompt;
   $("#puzzle-card").innerHTML = `
     <div class="card-topline"><span class="entry-label"><span class="status-dot ${solved ? "solved" : ""}"></span> ENTRY ${number(puzzle.id + 1)}${redoing ? '<span class="redo-badge">REDO</span>' : ""}</span><span class="category-label">${escapeHtml(chapter.category)} <span>↗</span></span></div>
-    <div class="card-body"><div class="entry-overline">CHAPTER ${chapter.numeral} <span>·</span> <button class="chapter-quick-menu" type="button" data-chapter-menu="${puzzle.chapter}" aria-haspopup="menu" aria-expanded="false" aria-label="Questions in ${escapeHtml(chapter.title)}">${escapeHtml(chapter.title)} ${icon("chevron")}</button></div><h2 id="puzzle-title" tabindex="-1">${escapeHtml(puzzle.title)}<span class="title-period">.</span></h2><p class="puzzle-prompt">${escapeHtml(prompt)}</p>
+    <div class="card-body"><div class="entry-overline">${PARTS[puzzle.part].name.toUpperCase()} <span>·</span> SECTION ${chapter.numeral} <span>·</span> <button class="chapter-quick-menu" type="button" data-chapter-menu="${puzzle.chapter}" aria-haspopup="menu" aria-expanded="false" aria-label="Questions in ${escapeHtml(chapter.title)}">${escapeHtml(chapter.title)} ${icon("chevron")}</button></div><h2 id="puzzle-title" tabindex="-1">${escapeHtml(puzzle.title)}<span class="title-period">.</span></h2><p class="puzzle-prompt">${escapeHtml(prompt)}</p>
     <div class="clue-toolbar"><button id="redo-question" class="copy-button" type="button" title="Start a fresh attempt. Your overall progress and field notes are kept.">${icon("restart")} Redo question</button><button id="copy-clue" class="copy-button" type="button" data-copy-label="Copy text">${icon("copy")} <span class="copy-label" aria-live="polite">Copy text</span></button></div>
     <div id="clue-panel" class="clue-panel clue-${puzzle.type}">${renderArt(puzzle)}</div>
     ${
       solved
-        ? `
-      <section class="solved-panel ${finished ? "final-panel" : ""}" aria-label="Entry solved"><div class="solved-heading"><span class="solved-check">${icon("check")}</span><div><span class="eyebrow">${finished ? "ALL ONE HUNDRED DOORS, OPEN" : "THE DOOR IS OPEN"}</span><h3>${finished ? "You followed the thread." : puzzle.id % 20 === 19 ? "A chapter, complete." : "A little closer."}</h3></div>${finished ? rosette : ""}</div><p>${escapeHtml(puzzle.explanation)}</p><div class="solution-word">THE ANSWER <strong>${escapeHtml(puzzle.answers[0])}</strong></div>${finished ? `<p class="final-note">Thank you for looking a little closer. ${Object.values(state.hints).reduce((a, b) => a + b, 0)} hints along the way. A hundred small discoveries.</p><button class="primary-button" data-action="index">Revisit the journey ${icon("book")}</button><button class="text-button share-button" data-action="share">Copy your result ${icon("smallArrow")}</button>` : `<button class="primary-button next-button" id="next-entry">${puzzle.id % 20 === 19 ? "Begin the next chapter" : "The next entry"} ${icon("arrow")}</button>`}</section>
-    `
+        ? solvedMarkup(puzzle)
         : `
       <form id="answer-form" novalidate><div class="answer-label-row"><label class="eyebrow" for="answer">YOUR ANSWER</label><span class="input-caption">a little thought goes a long way</span></div><div class="answer-control"><input id="answer" name="answer" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="200" placeholder="What do you think?" aria-describedby="answer-feedback"><button type="submit" class="submit-button">Enter ${icon("arrow")}</button></div><p id="answer-feedback" class="answer-feedback" role="status" aria-live="polite"></p></form>
       <div class="hint-container"><div class="hint-controls"><button id="hint-button" class="text-button">${icon("bulb")}<span>A gentle nudge</span></button><span class="hint-counter"></span></div><div id="hint-list" aria-live="polite"></div></div>
@@ -247,7 +272,11 @@ function renderPuzzle(focus = false) {
       save();
       renderHints();
     });
-  } else if (!finished) {
+  } else if (partDone) {
+    $("#begin-chapter-two")?.addEventListener("click", () =>
+      visit(PARTS[1].start),
+    );
+  } else {
     $("#next-entry").addEventListener("click", () => visit(puzzle.id + 1));
   }
   $(".lift-paper")?.addEventListener("click", (event) => {
@@ -268,6 +297,7 @@ function renderPuzzle(focus = false) {
     }
     tooltip.textContent = event.currentTarget.title;
   });
+  applyInspectionScene(puzzle);
   if (focus) $("#puzzle-title").focus({ preventScroll: true });
 }
 
@@ -429,6 +459,9 @@ async function copyText(text, message, button) {
 
 function dialog(title, eyebrow, body, wide = false) {
   chapterMenu.close();
+  disposeInspector();
+  disposeInspector = () => {};
+  $("#app-dialog").classList.remove("inspector-dialog");
   $("#dialog-eyebrow").textContent = eyebrow;
   $("#dialog-content").innerHTML = `<h2 id="dialog-title">${title}</h2>${body}`;
   $("#app-dialog").classList.toggle("wide-dialog", wide);
@@ -436,12 +469,21 @@ function dialog(title, eyebrow, body, wide = false) {
 }
 
 function openIndex(chapter = Math.floor(state.current / 20)) {
+  const partIndex = Math.floor(chapter / 5);
+  const offset = partIndex * 5;
   dialog(
     'Your index<span class="title-period">.</span>',
-    `${solvedCount(state)} OF 100 DOORS OPENED`,
+    `${solvedCount(state)} OF ${puzzles.length} DOORS OPENED`,
     `
     <p class="dialog-lede">Every answer leaves a little mark. Revisit any open entry.</p>
-    <div class="index-tabs" role="tablist" aria-label="Chapters">${chapters.map((c, i) => `<button role="tab" tabindex="${i === chapter ? 0 : -1}" aria-selected="${i === chapter}" id="chapter-tab-${i}" aria-controls="index-panel" data-index-chapter="${i}" class="${i === chapter ? "selected" : ""}">${c.numeral}<span>${c.title}</span></button>`).join("")}</div>
+    <div class="index-part-picker">${PARTS.map((part, i) => `<button type="button" data-index-part="${i}" aria-pressed="${i === partIndex}" ${!canVisit(state, part.start, puzzles.length) ? "disabled" : ""}>${part.name}<span>${number(part.start + 1)}—${number(part.start + part.count)}</span></button>`).join("")}</div>
+    <div class="index-tabs" role="tablist" aria-label="Sections">${chapters
+      .slice(offset, offset + 5)
+      .map((c, local) => {
+        const i = offset + local;
+        return `<button role="tab" tabindex="${i === chapter ? 0 : -1}" aria-selected="${i === chapter}" id="chapter-tab-${i}" aria-controls="index-panel" data-index-chapter="${i}" class="${i === chapter ? "selected" : ""}">${c.numeral}<span>${c.title}</span></button>`;
+      })
+      .join("")}</div>
     <div id="index-panel" role="tabpanel" aria-labelledby="chapter-tab-${chapter}" class="index-list">${puzzles
       .slice(chapter * 20, (chapter + 1) * 20)
       .map((p) => {
@@ -463,43 +505,37 @@ function openHelp() {
     `
     <p class="dialog-lede">No hurry. No timer. Just you, a page, and what you notice.</p>
     <ol class="rules-list"><li><span>01</span><div><h3>Read closely.</h3><p>Every entry has a word, phrase, or number for an answer. Wording, patterns, and tiny details all matter. Capitalization, spaces, and punctuation in your answers do not.</p></div></li><li><span>02</span><div><h3>Look around the page.</h3><p>Later clues live in image descriptions, HTML comments, styles, or the address bar. “Inspect this page” puts those details within reach, on desktop and mobile.</p></div></li><li><span>03</span><div><h3>Bring a little help.</h3><p>The decoder desk translates common encodings. Field notes keep your thoughts for each entry. A gentle nudge offers up to three hints; the last one reveals the answer.</p></div></li><li><span>04</span><div><h3>Follow your thread.</h3><p>Solve an entry to open the next. Your index remembers every solved answer. Progress saves in this browser, so return whenever curiosity calls.</p></div></li></ol>
-    <div class="help-footnote">An original collection inspired by the tradition of browser riddles. No accounts. No downloads. A hundred little discoveries.</div><button class="primary-button" data-action="close">Back to the riddle ${icon("arrow")}</button>
+    <div class="help-footnote">An original collection inspired by the tradition of browser riddles. No accounts. No downloads. Two hundred little discoveries.</div><button class="primary-button" data-action="close">Back to the riddle ${icon("arrow")}</button>
   `,
   );
 }
 
 function openInspector(tab = "source") {
+  const continuing =
+    $("#app-dialog").open &&
+    $("#app-dialog").classList.contains("inspector-dialog");
+  if (!continuing)
+    inspectionSnapshot = capturePage(puzzles[state.current], entryAddress.href);
+  const tabs = [
+    ["source", "Page source"],
+    ["details", "Page details"],
+    ["elements", "Elements"],
+    ["layout", "Layout"],
+  ];
   dialog(
-    'Behind the paper<span class="title-period">.</span>',
-    `THE PAGE INSPECTOR · ENTRY ${number(state.current + 1)}`,
-    `
-    <p class="dialog-lede">The page is part of the puzzle. Here is what lies beneath its ink.</p>
-    <div class="inspector-tabs" role="tablist" aria-label="Inspector view"><button id="source-tab" role="tab" tabindex="${tab === "source" ? 0 : -1}" aria-controls="inspector-panel" aria-selected="${tab === "source"}" data-inspector-tab="source" class="${tab === "source" ? "selected" : ""}">Page source</button><button id="details-tab" role="tab" tabindex="${tab === "details" ? 0 : -1}" aria-controls="inspector-panel" aria-selected="${tab === "details"}" data-inspector-tab="details" class="${tab === "details" ? "selected" : ""}">Page details</button></div>
-    <div id="inspector-panel" role="tabpanel" aria-labelledby="${tab}-tab"></div><p class="inspector-footnote">Only the current entry’s clue is shown here. Some pages have nothing to hide.</p>
-  `,
+    'Behind the page<span class="title-period">.</span>',
+    `FULL PAGE INSPECTOR · ENTRY ${number(state.current + 1)}`,
+    `<p class="dialog-lede">Explore the full document, from its head to the edges of its layout.</p><div class="inspector-tabs" role="tablist" aria-label="Inspector view">${tabs.map(([id, label]) => `<button id="${id}-tab" role="tab" tabindex="${tab === id ? 0 : -1}" aria-controls="inspector-panel" aria-selected="${tab === id}" data-inspector-tab="${id}" class="${tab === id ? "selected" : ""}">${label}</button>`).join("")}</div><div id="inspector-panel" role="tabpanel" aria-labelledby="${tab}-tab"></div><p class="inspector-footnote">Full page structure and styles. Private field-note text, application JavaScript, and binary font data are omitted from code views. The layout preview is read-only.</p>`,
     true,
   );
-  const panel = $("#inspector-panel");
-  if (tab === "source") {
-    panel.innerHTML = '<pre class="inspector-source"><code></code></pre>';
-    panel.querySelector("code").textContent = $(
-      "#clue-panel",
-    ).innerHTML.replace(/></g, ">\n<");
-  } else {
-    const p = puzzles[state.current];
-    const descriptions = [
-      ...$("#clue-panel").querySelectorAll("[alt], [aria-label], [title]"),
-    ].map(
-      (node) =>
-        node.getAttribute("alt") ||
-        node.getAttribute("aria-label") ||
-        node.getAttribute("title"),
-    );
-    const styles = [...$("#clue-panel").querySelectorAll("[style]")].map(
-      (node) => node.getAttribute("style"),
-    );
-    panel.innerHTML = `<dl class="page-details"><dt>Tab title</dt><dd>${escapeHtml(document.title)}</dd><dt>${embedded ? "Entry address" : "Page address"}</dt><dd class="address-detail">${escapeHtml(entryAddress.href)}</dd><dt>Accessible descriptions & tooltips</dt><dd>${descriptions.length ? descriptions.map(escapeHtml).join("<br>") : "No additional descriptions on this entry."}</dd><dt>Clue-specific styles</dt><dd><code>${escapeHtml([...(p.styleClue ? [p.styleClue] : []), ...styles].join("\n") || "No additional style clues on this entry.")}</code></dd></dl>`;
-  }
+  $("#app-dialog").classList.add("inspector-dialog");
+  disposeInspector = renderInspector({
+    panel: $("#inspector-panel"),
+    snapshot: inspectionSnapshot,
+    tab,
+    onCopy: (text) => copyText(text, "Inspection text copied."),
+    onTab: openInspector,
+  });
 }
 
 function openDecoder() {
@@ -670,7 +706,7 @@ function openReset() {
   dialog(
     'A fresh piece of paper<span class="title-period">.</span>',
     "START AGAIN?",
-    `<p class="dialog-lede">This clears all 100 entries, hints, and field notes from this browser. Your current journey cannot be recovered.</p><div class="reset-actions"><button class="primary-button danger-button" id="confirm-reset">Clear my journey</button><button class="secondary-button" data-action="index">Keep my place</button></div>`,
+    `<p class="dialog-lede">This clears all ${puzzles.length} entries, hints, and field notes from this browser. Your current journey cannot be recovered.</p><div class="reset-actions"><button class="primary-button danger-button" id="confirm-reset">Clear my journey</button><button class="secondary-button" data-action="index">Keep my place</button></div>`,
   );
   $("#confirm-reset").addEventListener("click", () => {
     state = freshState();
@@ -690,7 +726,8 @@ document.addEventListener("click", (event) => {
   if (action === "reset") openReset();
   if (action === "close") $("#app-dialog").close();
   if (action === "share") {
-    const message = `I opened all 100 doors in The Afterword — an original browser riddle. ${Object.values(state.hints).reduce((a, b) => a + b, 0)} hints, a hundred discoveries.`;
+    const part = PARTS[puzzles[state.current].part];
+    const message = `I finished ${part.name} (${part.count} entries) of The Afterword — ${solvedCount(state)} of ${puzzles.length} doors opened.`;
     if (navigator.clipboard?.writeText)
       navigator.clipboard
         .writeText(message)
@@ -702,6 +739,20 @@ document.addEventListener("click", (event) => {
   }
   const chapter = event.target.closest("[data-chapter]");
   if (chapter) openIndex(Number(chapter.dataset.chapter));
+  const partButton = event.target.closest("[data-part]");
+  if (partButton && !partButton.disabled) {
+    const part = PARTS[Number(partButton.dataset.part)];
+    if (canVisit(state, part.start, puzzles.length))
+      visit(
+        Math.min(
+          unlockedIndex(state, puzzles.length),
+          part.start + part.count - 1,
+        ),
+      );
+  }
+  const indexPart = event.target.closest("[data-index-part]");
+  if (indexPart && !indexPart.disabled)
+    openIndex(Number(indexPart.dataset.indexPart) * 5);
   const indexChapter = event.target.closest("[data-index-chapter]");
   if (indexChapter) {
     openIndex(Number(indexChapter.dataset.indexChapter));
@@ -738,6 +789,10 @@ $(".skip-link").addEventListener("click", (event) => {
   event.preventDefault();
   $("#puzzle-title").focus();
   $("#puzzle-title").scrollIntoView({ block: "start" });
+});
+$("#app-dialog").addEventListener("close", () => {
+  disposeInspector();
+  disposeInspector = () => {};
 });
 $(".dialog-close").addEventListener("click", () => $("#app-dialog").close());
 $("#app-dialog").addEventListener("click", (event) => {

@@ -15,9 +15,9 @@ import {
 } from "../src/engine.js";
 import { decodeText } from "../src/decoder.js";
 
-test("100 complete entries form five sequential chapters", () => {
-  assert.equal(puzzles.length, 100);
-  assert.equal(chapters.length, 5);
+test("200 complete entries form ten sequential sections", () => {
+  assert.equal(puzzles.length, 200);
+  assert.equal(chapters.length, 10);
   const titles = new Set();
   for (const [id, puzzle] of puzzles.entries()) {
     assert.equal(puzzle.id, id);
@@ -67,8 +67,8 @@ test("progress is sequential; wrong and duplicate answers cannot unlock or infla
       "already-solved",
     );
   }
-  assert.equal(Object.keys(state.solved).length, 100);
-  assert.ok(!canVisit(state, 100));
+  assert.equal(Object.keys(state.solved).length, 200);
+  assert.ok(!canVisit(state, 200));
   assert.ok(!canVisit(state, -1));
   assert.equal(state.attempts[0], 2);
 });

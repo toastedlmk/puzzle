@@ -1,4 +1,5 @@
 import { canVisit } from "./engine.js";
+import { PARTS } from "./game-config.js";
 
 // Chapter shortcuts share the normal navigation path, so locked questions stay
 // locked and revisiting an entry keeps its saved notes and completion record.
@@ -60,17 +61,22 @@ export function createChapterMenu({
   }
 
   function open(chapterIndex, source, point) {
-    const chapter = chapters[chapterIndex];
+    const partNumber = source?.dataset.part ?? source?.dataset.indexPart;
+    const part = partNumber === undefined ? null : PARTS[Number(partNumber)];
+    const chapter = part || chapters[chapterIndex];
     if (!chapter || !source) return;
     close();
     anchor = source;
-    selectedChapter = chapterIndex;
+    selectedChapter = part ? part.start / 20 : chapterIndex;
     const state = getState();
     const available = puzzles
-      .slice(chapterIndex * 20, (chapterIndex + 1) * 20)
+      .slice(
+        part ? part.start : chapterIndex * 20,
+        part ? part.start + part.count : (chapterIndex + 1) * 20,
+      )
       .filter((puzzle) => canVisit(state, puzzle.id, puzzles.length));
     menu.innerHTML = `
-      <div class="chapter-menu-heading"><span>CHAPTER ${escape(chapter.numeral)}</span><h3 id="chapter-menu-title">${escape(chapter.title)}</h3><p>${available.length} ${available.length === 1 ? "question" : "questions"} available</p></div>
+      <div class="chapter-menu-heading"><span>${part ? escape(part.name.toUpperCase()) : `SECTION ${escape(chapter.numeral)}`}</span><h3 id="chapter-menu-title">${escape(chapter.title)}</h3><p>${available.length} ${available.length === 1 ? "question" : "questions"} available</p></div>
       <div class="chapter-menu-list">${available.length ? available.map((puzzle) => `<button type="button" role="menuitem" tabindex="-1" class="chapter-menu-item" data-menu-visit="${puzzle.id}" ${puzzle.id === state.current ? 'aria-current="page"' : ""}><span class="chapter-menu-number">${String(puzzle.id + 1).padStart(3, "0")}</span><span class="chapter-menu-question">${escape(puzzle.title)}</span>${icon(state.solved[puzzle.id] ? "check" : "arrow")}</button>`).join("") : '<p class="chapter-menu-empty">No questions unlocked in this chapter yet.</p>'}</div>
       <div class="chapter-menu-footer"><button type="button" role="menuitem" tabindex="-1" data-menu-index>Open full chapter index ${icon("arrow")}</button></div>
     `;
@@ -100,11 +106,19 @@ export function createChapterMenu({
   function chapterTarget(target) {
     return target instanceof Element
       ? target.closest(
-          "[data-chapter], [data-index-chapter], [data-chapter-menu]",
+          "[data-chapter], [data-index-chapter], [data-chapter-menu], [data-part], [data-index-part]",
         )
       : null;
   }
   function chapterNumber(target) {
+    if (
+      target.dataset.part !== undefined ||
+      target.dataset.indexPart !== undefined
+    )
+      return (
+        PARTS[Number(target.dataset.part ?? target.dataset.indexPart)].start /
+        20
+      );
     return Number(
       target.dataset.chapter ??
         target.dataset.indexChapter ??

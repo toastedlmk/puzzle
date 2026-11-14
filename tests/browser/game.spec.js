@@ -11,7 +11,7 @@ test("wrong answers, hints, notes, reload, replay, and chapter locks work togeth
   await page.locator("#answer").fill("wrong");
   await page.locator("#answer-form").evaluate((form) => form.requestSubmit());
   await expect(page.locator("#answer-feedback")).toContainText("Not quite");
-  await expect(page.locator(".header-progress")).toHaveText("0 / 100");
+  await expect(page.locator(".header-progress")).toHaveText("0 / 200");
   await page.locator("#hint-button").click();
   await expect(page.locator(".hint-note")).toHaveCount(1);
   await page.locator("#hint-button").click();
@@ -21,7 +21,7 @@ test("wrong answers, hints, notes, reload, replay, and chapter locks work togeth
   await page.locator("#answer").fill("WHAT?");
   await page.locator("#answer").press("Enter");
   await expect(page.locator(".solved-panel")).toBeVisible();
-  await expect(page.locator(".header-progress")).toHaveText("1 / 100");
+  await expect(page.locator(".header-progress")).toHaveText("1 / 200");
   await page.reload();
   await expect(page.locator(".solved-panel")).toBeVisible();
   await expect(page.locator("#field-note")).toHaveValue(
@@ -38,7 +38,7 @@ test("wrong answers, hints, notes, reload, replay, and chapter locks work togeth
   await expect(page.locator("#field-note")).toHaveValue(
     "Read the question literally.",
   );
-  await expect(page.locator(".header-progress")).toHaveText("1 / 100");
+  await expect(page.locator(".header-progress")).toHaveText("1 / 200");
 });
 
 test("help, source inspector, details tab, and decoder desk are functional", async ({
@@ -116,9 +116,9 @@ for (const width of [1440, 390]) {
       "true",
     );
     await expect(page.locator("#answer-feedback")).toBeEmpty();
-    await expect(page.locator(".header-progress")).toHaveText("0 / 100");
+    await expect(page.locator(".header-progress")).toHaveText("0 / 200");
     await page.locator("#answer").press("Enter");
-    await expect(page.locator(".header-progress")).toHaveText("1 / 100");
+    await expect(page.locator(".header-progress")).toHaveText("1 / 200");
 
     await page.locator('[data-action="decoder"]').click();
     await page.locator("#decode-input").fill("d2hhdA==");
@@ -132,7 +132,7 @@ for (const width of [1440, 390]) {
   });
 }
 
-test("all 100 entries can be completed and browser-specific clues are really present", async ({
+test("all 200 entries can be completed and browser-specific clues are really present", async ({
   page,
 }) => {
   const errors = [];
@@ -178,15 +178,17 @@ test("all 100 entries can be completed and browser-specific clues are really pre
     await page.locator("#answer").press("Enter");
     await expect(page.locator(".solved-panel")).toBeVisible();
     await expect(page.locator(".header-progress")).toHaveText(
-      `${puzzle.id + 1} / 100`,
+      `${puzzle.id + 1} / 200`,
     );
-    if (puzzle.id < 99) await page.locator("#next-entry").click();
+    if (puzzle.id === 99) await page.locator("#begin-chapter-two").click();
+    else if (puzzle.id < puzzles.length - 1)
+      await page.locator("#next-entry").click();
   }
   await expect(page.locator(".final-panel")).toContainText(
-    "You followed the thread.",
+    "You saw beyond the surface.",
   );
   await page.reload();
-  await expect(page.locator(".header-progress")).toHaveText("100 / 100");
+  await expect(page.locator(".header-progress")).toHaveText("200 / 200");
   await expect(page.locator(".final-panel")).toBeVisible();
   expect(errors).toEqual([]);
 });
@@ -288,9 +290,9 @@ test("reset requires an explicit choice and clears the saved journey", async ({
   await page.locator(".progress-button").click();
   await page.locator('[data-action="reset"]').click();
   await page.getByRole("button", { name: "Keep my place" }).click();
-  await expect(page.locator(".header-progress")).toHaveText("1 / 100");
+  await expect(page.locator(".header-progress")).toHaveText("1 / 200");
   await page.locator('[data-action="reset"]').click();
   await page.locator("#confirm-reset").click();
-  await expect(page.locator(".header-progress")).toHaveText("0 / 100");
+  await expect(page.locator(".header-progress")).toHaveText("0 / 200");
   await expect(page.locator("#answer")).toBeVisible();
 });

@@ -129,9 +129,9 @@ test("copy the decimal clue from entry 028, translate it, copy the result, and f
   await expect(page.locator("#copy-translation")).toContainText("Copied!");
   await page.locator("#use-translation").click();
   await expect(page.locator("#answer")).toHaveValue("SHELF");
-  await expect(page.locator(".header-progress")).toHaveText("27 / 100");
+  await expect(page.locator(".header-progress")).toHaveText("27 / 200");
   await page.locator("#answer").press("Enter");
-  await expect(page.locator(".header-progress")).toHaveText("28 / 100");
+  await expect(page.locator(".header-progress")).toHaveText("28 / 200");
 });
 
 test("Morse handles copied puzzle symbols and encodes text; bad input cannot be copied as a result", async ({
