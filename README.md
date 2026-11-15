@@ -43,7 +43,7 @@ The regular development server runs inside the cloud workspace. Its `localhost:3
 ## The game
 
 - Two chapters of 100 entries, each split into five sections. Chapter 1 preserves the original 100 questions. Chapter 2 adds questions 101–200 with evidence hidden across the document, styles, metadata, templates, and layout. Its start button appears directly below Copy your result after question 100.
-- Three progressive hints for every entry; the third explicitly reveals its answer.
+- Three progressive hints for every entry; the third reveals its answer with a numbered, question-specific explanation of each solving step. Solved entries also offer a **Why this answer? Step by step** section so the walkthrough can be revisited.
 - Per-entry notes, completed answers, and progress persist in this browser's local storage. The site warns when storage is unavailable. Clearing browser data clears the save; there is no cross-device sync.
 - The full-page inspector includes searchable HTML source, an element browser, attributes, computed styles, pseudo-elements, dimensions, and a clickable read-only page-layout preview. It includes head, header, sidebars, content, and footer. Private field notes and application JavaScript are omitted from code views. No browser developer tools are required on mobile.
 - The decoder desk provides 32 translations: Morse in both directions; adjustable alphabet rotation and ROT13; Atbash; keyed Vigenère; five-bit/Bacon; Polybius; two-rail fence; NATO phonetics; binary, hexadecimal, decimal, and octal bytes; alphabet positions; Roman numerals; Base64; URL encoding; common HTML entities; and reversal. Common encodings work in both directions and support UTF-8 text. The translator never evaluates submitted JavaScript.
@@ -58,6 +58,7 @@ The regular development server runs inside the cloud workspace. Its `localhost:3
 
 - `src/puzzles.js`: original questions and the complete 200-entry catalogue.
 - `src/inspection-puzzles.js`: the 100 inspection-focused questions and their actual page evidence.
+- `src/solution-steps.js`: step-by-step walkthroughs for all 200 entries.
 - `src/inspection-scenes.js`: mounts and cleans up each question's document attributes, hidden elements, comments, and styles.
 - `src/inspector.js`: full-document snapshots, DOM browsing, styles, and the script-free layout preview.
 - `src/game-config.js`: chapter ranges and total entry count.

@@ -22,6 +22,7 @@ import { createChapterMenu } from "./chapter-menu.js";
 import { PARTS } from "./game-config.js";
 import { applyInspectionScene } from "./inspection-scenes.js";
 import { capturePage, renderInspector } from "./inspector.js";
+import { getSolutionSteps } from "./solution-steps.js";
 
 const icons = {
   arrow: '<path d="M4 12h16m-6-6 6 6-6 6"/>',
@@ -154,6 +155,12 @@ function renderNavigation() {
     `<div class="journey-label"><span>YOUR JOURNEY</span><span>${percent}%</span></div><div class="journey-track" role="progressbar" aria-label="Entries solved" aria-valuenow="${completed}" aria-valuemin="0" aria-valuemax="${puzzles.length}"><span style="width:${percent}%"></span></div><p><strong>${completed}</strong> of ${puzzles.length} doors opened.</p><span class="journey-footnote">A little further, one entry at a time.</span>`;
 }
 
+function solutionStepsMarkup(puzzle) {
+  return `<ol class="solution-steps">${getSolutionSteps(puzzle)
+    .map((step) => `<li>${escapeHtml(step)}</li>`)
+    .join("")}</ol>`;
+}
+
 function solvedMarkup(puzzle) {
   const part = PARTS[puzzle.part];
   const partDone = puzzle.id === part.start + part.count - 1;
@@ -164,7 +171,7 @@ function solvedMarkup(puzzle) {
         Number(id) >= part.start && Number(id) < part.start + part.count,
     )
     .reduce((total, [, count]) => total + count, 0);
-  return `<section class="solved-panel ${partDone ? "final-panel" : ""}" ${partDone ? `data-part-complete="${puzzle.part + 1}"` : ""} aria-label="Entry solved"><div class="solved-heading"><span class="solved-check">${icon("check")}</span><div><span class="eyebrow">${partDone ? `${part.name.toUpperCase()} COMPLETE` : "THE DOOR IS OPEN"}</span><h3>${partDone ? (final ? "You saw beyond the surface." : "You followed the thread.") : puzzle.id % 20 === 19 ? "A section, complete." : "A little closer."}</h3></div>${partDone ? rosette : ""}</div><p>${escapeHtml(puzzle.explanation)}</p><div class="solution-word">THE ANSWER <strong>${escapeHtml(puzzle.answers[0])}</strong></div>${partDone ? `<p class="final-note">${part.count} discoveries in ${part.name}. ${hints} hints along the way.${final ? " All two hundred doors are open." : ""}</p><button class="primary-button" data-action="index">Revisit the journey ${icon("book")}</button><button class="text-button share-button" data-action="share">Copy your result ${icon("smallArrow")}</button>${!final ? `<button type="button" class="primary-button chapter-two-button" id="begin-chapter-two">Chapter 2 · Behind the page ${icon("arrow")}</button>` : ""}` : `<button class="primary-button next-button" id="next-entry">${puzzle.id % 20 === 19 ? "Begin the next section" : "The next entry"} ${icon("arrow")}</button>`}</section>`;
+  return `<section class="solved-panel ${partDone ? "final-panel" : ""}" ${partDone ? `data-part-complete="${puzzle.part + 1}"` : ""} aria-label="Entry solved"><div class="solved-heading"><span class="solved-check">${icon("check")}</span><div><span class="eyebrow">${partDone ? `${part.name.toUpperCase()} COMPLETE` : "THE DOOR IS OPEN"}</span><h3>${partDone ? (final ? "You saw beyond the surface." : "You followed the thread.") : puzzle.id % 20 === 19 ? "A section, complete." : "A little closer."}</h3></div>${partDone ? rosette : ""}</div><p>${escapeHtml(puzzle.explanation)}</p><div class="solution-word">THE ANSWER <strong>${escapeHtml(puzzle.answers[0])}</strong></div><details class="solution-recap"><summary>Why this answer? Step by step</summary>${solutionStepsMarkup(puzzle)}</details>${partDone ? `<p class="final-note">${part.count} discoveries in ${part.name}. ${hints} hints along the way.${final ? " All two hundred doors are open." : ""}</p><button class="primary-button" data-action="index">Revisit the journey ${icon("book")}</button><button class="text-button share-button" data-action="share">Copy your result ${icon("smallArrow")}</button>${!final ? `<button type="button" class="primary-button chapter-two-button" id="begin-chapter-two">Chapter 2 · Behind the page ${icon("arrow")}</button>` : ""}` : `<button class="primary-button next-button" id="next-entry">${puzzle.id % 20 === 19 ? "Begin the next section" : "The next entry"} ${icon("arrow")}</button>`}</section>`;
 }
 
 function renderArt(puzzle) {
@@ -306,9 +313,10 @@ function renderHints() {
   const count = state.redos[puzzle.id]?.hints ?? state.hints[puzzle.id] ?? 0;
   $("#hint-list").innerHTML = puzzle.hints
     .slice(0, count)
-    .map(
-      (hint, i) =>
-        `<p class="hint-note"><span>${i === 2 ? "THE ANSWER" : `NUDGE ${i + 1}`}</span>${escapeHtml(hint)}</p>`,
+    .map((hint, i) =>
+      i === 2
+        ? `<section class="hint-note answer-reveal" aria-labelledby="answer-reveal-title"><span>THE ANSWER</span><h3 id="answer-reveal-title">${escapeHtml(hint)}</h3><p class="walkthrough-label">Why this answer? Step by step</p>${solutionStepsMarkup(puzzle)}</section>`
+        : `<p class="hint-note"><span>NUDGE ${i + 1}</span>${escapeHtml(hint)}</p>`,
     )
     .join("");
   $(".hint-counter").textContent = `${count} OF 3`;
@@ -319,7 +327,7 @@ function renderHints() {
         ? "A little more help"
         : count === 2
           ? "Reveal the answer"
-          : "No more secrets";
+          : "Answer explained";
   $("#hint-button").disabled = count === 3;
 }
 
@@ -504,7 +512,7 @@ function openHelp() {
     "A NOTE BEFORE YOU BEGIN",
     `
     <p class="dialog-lede">No hurry. No timer. Just you, a page, and what you notice.</p>
-    <ol class="rules-list"><li><span>01</span><div><h3>Read closely.</h3><p>Every entry has a word, phrase, or number for an answer. Wording, patterns, and tiny details all matter. Capitalization, spaces, and punctuation in your answers do not.</p></div></li><li><span>02</span><div><h3>Look around the page.</h3><p>Later clues live in image descriptions, HTML comments, styles, or the address bar. “Inspect this page” puts those details within reach, on desktop and mobile.</p></div></li><li><span>03</span><div><h3>Bring a little help.</h3><p>The decoder desk translates common encodings. Field notes keep your thoughts for each entry. A gentle nudge offers up to three hints; the last one reveals the answer.</p></div></li><li><span>04</span><div><h3>Follow your thread.</h3><p>Solve an entry to open the next. Your index remembers every solved answer. Progress saves in this browser, so return whenever curiosity calls.</p></div></li></ol>
+    <ol class="rules-list"><li><span>01</span><div><h3>Read closely.</h3><p>Every entry has a word, phrase, or number for an answer. Wording, patterns, and tiny details all matter. Capitalization, spaces, and punctuation in your answers do not.</p></div></li><li><span>02</span><div><h3>Look around the page.</h3><p>Later clues live in image descriptions, HTML comments, styles, or the address bar. “Inspect this page” puts those details within reach, on desktop and mobile.</p></div></li><li><span>03</span><div><h3>Bring a little help.</h3><p>The decoder desk translates common encodings. Field notes keep your thoughts for each entry. A gentle nudge offers up to three hints; the last one reveals the answer with a step-by-step explanation. You can reopen the explanation after solving an entry.</p></div></li><li><span>04</span><div><h3>Follow your thread.</h3><p>Solve an entry to open the next. Your index remembers every solved answer. Progress saves in this browser, so return whenever curiosity calls.</p></div></li></ol>
     <div class="help-footnote">An original collection inspired by the tradition of browser riddles. No accounts. No downloads. Two hundred little discoveries.</div><button class="primary-button" data-action="close">Back to the riddle ${icon("arrow")}</button>
   `,
   );

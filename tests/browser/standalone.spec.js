@@ -67,6 +67,29 @@ test("standalone edition completes all 200 entries with every network request bl
   expect(errors).toEqual([]);
 });
 
+test("standalone answer reveals include the full explanation without network access", async ({
+  page,
+}) => {
+  const requests = [];
+  await page.route("**/*", (route) => {
+    requests.push(route.request().url());
+    return route.abort();
+  });
+  await page.setContent(html);
+  await page.locator("#hint-button").click();
+  await page.locator("#hint-button").click();
+  await page.locator("#hint-button").click();
+  await expect(page.locator(".answer-reveal li")).toHaveCount(3);
+  await expect(page.locator(".answer-reveal li").last()).toContainText(
+    "answer is what",
+  );
+  await page.locator("#answer").fill("what");
+  await page.locator("#answer").press("Enter");
+  await page.locator(".solution-recap summary").click();
+  await expect(page.locator(".solution-recap li").last()).toBeVisible();
+  expect(requests).toEqual([]);
+});
+
 test("standalone edition preserves notes and progress when browser storage is allowed", async ({
   page,
 }) => {

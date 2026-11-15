@@ -885,6 +885,57 @@ button:not(:disabled):active {
   color: #999675;
   margin-bottom: 4px;
 }
+.answer-reveal {
+  border-color: var(--accent);
+  background: #f0f3e8;
+}
+.answer-reveal h3 {
+  margin: 4px 0 16px;
+  font-family: var(--serif);
+  font-size: 25px;
+  font-weight: 400;
+  line-height: 1.2;
+  color: var(--ink);
+}
+.walkthrough-label {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.solution-steps {
+  margin: 0;
+  padding-left: 23px;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.85;
+  overflow-wrap: anywhere;
+}
+.solution-steps li {
+  padding-left: 4px;
+}
+.solution-steps li + li {
+  margin-top: 10px;
+}
+.solution-steps li::marker {
+  color: #63764b;
+  font-family: var(--mono);
+  font-weight: 600;
+}
+.solution-recap {
+  margin: 0 0 22px;
+  padding: 14px 0;
+  border-block: 1px solid #dce3cf;
+}
+.solution-recap summary {
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.7;
+  cursor: pointer;
+}
+.solution-recap[open] summary {
+  margin-bottom: 14px;
+}
 .card-footer {
   border-top: 1px solid #e9e9df;
   padding: 15px 27px;
